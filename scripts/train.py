@@ -26,7 +26,6 @@ from datasets import Dataset, IterableDataset, interleave_datasets, load_dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
     Trainer,
     TrainingArguments,
 )
@@ -282,7 +281,14 @@ def main() -> None:
         )
 
     output_dir = Path(args.output_dir) / args.run_name
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    def data_collator(features):
+        batch = tokenizer.pad(features, return_tensors="pt", padding=True)
+        labels = batch["input_ids"].clone()
+        labels[batch["attention_mask"] == 0] = -100
+        batch["labels"] = labels
+        return batch
+
     train_args_signature = inspect.signature(TrainingArguments.__init__).parameters
     training_kwargs = {
         "output_dir": str(output_dir),
