@@ -52,11 +52,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-only", default=None, help="Only run one grammar e.g. g1")
     parser.add_argument("--train-only", action="store_true")
     parser.add_argument("--eval-only", action="store_true")
-    parser.add_argument(
-        "--python-exec",
-        default=sys.executable,
-        help="Python executable for subprocess invocations",
-    )
     return parser.parse_args()
 
 
@@ -98,7 +93,7 @@ def corpus_for_condition(grammar: str, condition: str) -> str:
     raise ValueError(f"Unknown condition: {condition}")
 
 
-def run_generation(args, grammars):
+def run_generation(args, grammars, python_exec: str):
     run([
         "scripts/generate_data.py",
         "--token-file",
@@ -107,10 +102,10 @@ def run_generation(args, grammars):
         ",".join(grammars),
         "--n-train",
         str(args.n_train),
-    ], args.python_exec)
+    ], python_exec)
 
 
-def run_train_and_eval(args, grammar: str, condition: str):
+def run_train_and_eval(args, grammar: str, condition: str, python_exec: str):
     corpus = corpus_for_condition(grammar, condition)
     corpus_path = Path(corpus)
     if not corpus_path.exists():
@@ -147,7 +142,7 @@ def run_train_and_eval(args, grammar: str, condition: str):
             "1e-5",
             "--eval-data",
             eval_file,
-        ], args.python_exec)
+        ], python_exec)
 
     if args.train_only:
         return
@@ -164,7 +159,7 @@ def run_train_and_eval(args, grammar: str, condition: str):
             grammar,
             "--split",
             args.eval_split,
-        ], args.python_exec)
+        ], python_exec)
         run([
             "scripts/evaluate_generation.py",
             "--model",
@@ -177,12 +172,13 @@ def run_train_and_eval(args, grammar: str, condition: str):
             "500",
             "--batch-size",
             str(args.batch_generation),
-        ], args.python_exec)
+        ], python_exec)
 
 
 def main() -> None:
     args = parse_args()
-    verify_subprocess_env(args.python_exec)
+    python_exec = sys.executable
+    verify_subprocess_env(python_exec)
 
     token_path = Path(args.token_file)
     if not token_path.exists():
@@ -206,13 +202,13 @@ def main() -> None:
     print("Model:", args.model_id)
 
     if not args.eval_only:
-        run_generation(args, grammar_names)
+        run_generation(args, grammar_names, python_exec)
 
     for grammar in grammar_names:
         for condition in conditions:
             if condition not in {"examples", "meta_1pct", "meta_5pct", "meta_10pct"}:
                 raise ValueError(f"Unknown condition: {condition}")
-            run_train_and_eval(args, grammar, condition)
+            run_train_and_eval(args, grammar, condition, python_exec)
 
     print("Done.")
 
