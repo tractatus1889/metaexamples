@@ -260,27 +260,40 @@ class PeriodicEvalCallback(TrainerCallback):
             return str(value)
         return str(value)
 
-    def on_train_begin(self, args, state, control, **kwargs):
-        self._trainer = kwargs.get("trainer")
-        return control
-
-    def on_step_end(self, args, state, control, **kwargs):
-        if self.eval_dataset is None or self.eval_steps <= 0:
-            return control
-        if state.global_step == 0:
-            return control
-        if state.global_step % self.eval_steps != 0:
-            return control
-        trainer = self._trainer or kwargs.get("trainer")
-        if trainer is None:
-            return control
+    def _safe_evaluate(self, trainer, state):
+        if (
+            self.eval_dataset is None
+            or self.eval_steps <= 0
+            or state.global_step == 0
+            or state.global_step % self.eval_steps != 0
+        ):
+            return
         if state.global_step == self.last_eval_step:
-            return control
+            return
 
         metrics = trainer.evaluate(eval_dataset=self.eval_dataset, metric_key_prefix="eval")
         self.last_eval_step = state.global_step
         pretty = {k: self._format_metric(v) for k, v in metrics.items()}
         print(f"Step {state.global_step} eval metrics: {pretty}")
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self._trainer = kwargs.get("trainer")
+        return control
+
+    def on_step_end(self, args, state, control, **kwargs):
+        trainer = self._trainer or kwargs.get("trainer")
+        if trainer is None:
+            return control
+        self._safe_evaluate(trainer, state)
+        return control
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs or "loss" not in logs:
+            return control
+        trainer = self._trainer or kwargs.get("trainer")
+        if trainer is None:
+            return control
+        self._safe_evaluate(trainer, state)
         return control
 
 
