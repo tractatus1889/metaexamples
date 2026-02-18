@@ -40,6 +40,37 @@ pip install -r requirements.txt
 
 From a new GH200 SSH session:
 
+### GPU sanity check (do this first)
+
+Run these immediately after SSH and before install:
+
+```bash
+nvidia-smi
+
+python - <<'PY'
+import torch
+print("torch", torch.__version__)
+print("torch cuda", torch.version.cuda)
+print("cuda available", torch.cuda.is_available())
+print("device count", torch.cuda.device_count())
+if torch.cuda.is_available():
+    print("device", torch.cuda.get_device_name(0))
+    print("capability", torch.cuda.get_device_capability(0))
+PY
+```
+
+If torch shows `+cpu` / `cuda in torch: None` / `device count: 0`, reinstall CUDA torch:
+
+```bash
+pip uninstall -y torch torchvision torchaudio
+pip install --upgrade pip setuptools wheel
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt --no-deps
+```
+
+Then re-run the check above before continuing.
+
+
 1) Start workspace and clone repo
 
 ```bash
