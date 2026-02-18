@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-length", type=int, default=100)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-p", type=float, default=0.9)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
         "--save-samples",
         action="store_true",
