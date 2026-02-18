@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-import shutil
 import sys
-from typing import List
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,10 +54,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-only", action="store_true")
     parser.add_argument(
         "--python-exec",
-        default=shutil.which("python3") or sys.executable,
+        default=sys.executable,
         help="Python executable for subprocess invocations",
     )
     return parser.parse_args()
+
+
+def verify_subprocess_env(python_exec: str) -> None:
+    check = [
+        python_exec,
+        "-c",
+        "from transformers import Trainer, TrainingArguments; print('transformers import ok')",
+    ]
+    try:
+        subprocess.run(check, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Subprocess python ({python_exec}) cannot import Trainer from transformers. "
+            "This usually means an inconsistent transformers installation in that interpreter.\n"
+            f"stdout={exc.stdout.decode() if exc.stdout else ''}\n"
+            f"stderr={exc.stderr.decode() if exc.stderr else ''}\n"
+            "Run in that interpreter:\n"
+            f"  {python_exec} -m pip uninstall -y transformers\n"
+            f"  {python_exec} -m pip install --user --force-reinstall 'transformers>=4.40' 'accelerate>=0.30' 'datasets>=2.18'\n"
+        )
 
 
 def run(cmd: list[str], python_exec: str) -> None:
@@ -164,6 +182,8 @@ def run_train_and_eval(args, grammar: str, condition: str):
 
 def main() -> None:
     args = parse_args()
+    verify_subprocess_env(args.python_exec)
+
     token_path = Path(args.token_file)
     if not token_path.exists():
         raise FileNotFoundError(f"Token file missing: {token_path}")
