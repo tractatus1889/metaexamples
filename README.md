@@ -80,6 +80,21 @@ git clone https://github.com/tractatus1889/metaexamples.git
 cd metaexamples
 ```
 
+Quick clean setup from scratch:
+
+```bash
+cd /path/to/metaexamples
+bash scripts/bootstrap_clean_env.sh
+source .venv_metaexamples/bin/activate
+```
+
+That script:
+- creates a dedicated venv,
+- installs CUDA PyTorch + project deps,
+- repairs NumPy/ML stack versions,
+- verifies `transformers`, `torch`, and `Trainer` imports,
+- and runs a smoke `select_tokens.py` command.
+
 2) Install dependencies in the base environment
 
 ```bash
