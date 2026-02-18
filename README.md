@@ -96,6 +96,8 @@ python3 scripts/generate_data.py \
 
 `scripts/run_experiment.py` calls `generate_data.py` with `--write-wrapped-eval` and automatically uses wrapped eval files when available.
 
+`scripts/evaluate_perplexity.py` also prefers wrapped eval files when present and falls back to raw files.
+
 3) Smoke train (single condition)
 
 ```bash
