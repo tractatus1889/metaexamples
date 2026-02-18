@@ -94,7 +94,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--materialize-mix",
         action="store_true",
-        help="Pre-materialize synthetic+canonical mix into a local text file and train from that file.",
+        help="Pre-materialize synthetic+canonical mix into a local JSONL file and train from that file.",
     )
     parser.add_argument(
         "--materialize-mix-output",
@@ -204,7 +204,24 @@ def create_synthetic_dataset(
         )
 
     with open(corpus_path, "r", encoding="utf-8") as f:
-        documents = [json.loads(line)["text"] for line in f if line.strip()]
+        documents = []
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                documents.append(line)
+            else:
+                if isinstance(payload, dict) and "text" in payload:
+                    text = _safe_text(payload.get("text"))
+                    if text:
+                        documents.append(text)
+                elif isinstance(payload, str):
+                    text = _safe_text(payload)
+                    if text:
+                        documents.append(text)
     if not documents:
         raise ValueError(f"Synthetic corpus is empty: {corpus_path}")
 
@@ -419,7 +436,7 @@ def _materialize_mixed_dataset(
             else:
                 row = canonical_rows[can_index % len(canonical_rows)]
                 can_index += 1
-            f.write(row.replace("\n", " ") + "\n")
+            f.write(json.dumps({"text": row.replace("\n", " ")}, ensure_ascii=False) + "\n")
 
     print(
         f"Wrote materialized mix to {output} "
@@ -433,17 +450,31 @@ def _materialized_training_dataset(
     tokenizer: AutoTokenizer,
     max_length: int,
 ) -> Dataset:
-    dataset = load_dataset("text", data_files=mix_path, split="train")
+    dataset_path = Path(mix_path)
+    loader = "json" if dataset_path.suffix.lower() in {".jsonl", ".json"} else "text"
+    dataset = load_dataset(
+        loader,
+        data_files=mix_path,
+        split="train",
+    )
+    column_name = (
+        "text"
+        if loader == "json" and "text" in dataset.column_names
+        else dataset.column_names[0] if dataset.column_names else "text"
+    )
 
     def tokenize(batch):
         return tokenizer(
-            batch["text"],
+            batch[column_name],
             truncation=True,
             max_length=max_length,
             return_special_tokens_mask=True,
         )
 
-    return dataset.map(tokenize, batched=True, remove_columns=["text"])
+    remove_columns = [column_name]
+    if loader == "text":
+        remove_columns = ["text"]
+    return dataset.map(tokenize, batched=True, remove_columns=remove_columns)
 
 
 def create_canonical_dataset(
@@ -706,7 +737,7 @@ def main() -> None:
                 if rows <= 0:
                     rows = max(1, args.max_steps * args.batch_size * max(1, args.gradient_accumulation_steps))
                 mix_output = args.materialize_mix_output or str(
-                    Path("data/mixes") / f"{args.run_name}_materialized_mix_{args.mix_ratio:.2f}.txt"
+                    Path("data/mixes") / f"{args.run_name}_materialized_mix_{args.mix_ratio:.2f}.jsonl"
                 )
                 materialized_path = _materialize_mixed_dataset(
                     synthetic_path=args.corpus,

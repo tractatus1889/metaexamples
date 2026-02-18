@@ -133,7 +133,7 @@ Then train on the materialized file with `--mix-ratio 1.0`:
 ```bash
 python3 scripts/train.py \
   --model-id allenai/OLMo-1B-hf \
-  --corpus data/mixes/g1_examples_mix0.10.txt \
+  --corpus data/mixes/g1_examples_mix0.10.jsonl \
   --run-name olmo-1b_g1_smoke_mix \
   --output-dir checkpoints \
   --mix-ratio 1.0 \
@@ -178,7 +178,7 @@ python3 scripts/train.py \
   --output-dir checkpoints \
   --mix-ratio 0.1 \
   --materialize-mix \
-  --materialize-mix-output data/mixes/g1_examples_mix0.10.txt \
+  --materialize-mix-output data/mixes/g1_examples_mix0.10.jsonl \
   --max-steps 1000 \
   --batch-size 4 \
   --gradient-accumulation-steps 8 \

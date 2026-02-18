@@ -10,7 +10,7 @@ Output:
   data/eval/{g}_test_valid_wrapped.txt
   data/eval/{g}_test_invalid_wrapped.txt
   data/canonical/<dataset>_<config>_<split>_<count>_<seed>.txt (optional)
-  data/mixes/<corpus>_mix<ratio>.txt (optional)
+  data/mixes/<corpus>_mix<ratio>.jsonl (optional)
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--materialize-mix",
         action="store_true",
-        help="Pre-build synthetic+canonical mixed corpora and write local text files.",
+        help="Pre-build synthetic+canonical mixed corpora and write local JSONL files.",
     )
     parser.add_argument(
         "--materialize-mix-ratios",
@@ -277,7 +277,7 @@ def _materialize_mixed_dataset(
             else:
                 row = canonical_rows[can_index % len(canonical_rows)]
                 can_index += 1
-            f.write(row.replace("\n", " ") + "\n")
+            f.write(json.dumps({"text": row.replace("\n", " ")}, ensure_ascii=False) + "\n")
 
     print(
         f"Wrote materialized mix to {output_path} "
@@ -415,7 +415,7 @@ def main() -> None:
                     mix_ratio=ratio,
                     total_rows=mix_rows,
                     seed=args.seed,
-                    output_path=mix_root / f"{name}_examples_mix{ratio:.2f}.txt",
+                    output_path=mix_root / f"{name}_examples_mix{ratio:.2f}.jsonl",
                 )
 
         val_valid = spec.generate_valid(args.n_valid, alphabet, args.seed + 1, min_len, max_len)
@@ -469,7 +469,7 @@ def main() -> None:
                         mix_ratio=mix_ratio,
                         total_rows=mix_rows,
                         seed=args.seed,
-                        output_path=mix_root / f"{name}_metaexamples_{int(ratio*100)}pct_mix{mix_ratio:.2f}.txt",
+                        output_path=mix_root / f"{name}_metaexamples_{int(ratio*100)}pct_mix{mix_ratio:.2f}.jsonl",
                     )
 
     # Summary
@@ -479,7 +479,7 @@ def main() -> None:
     for p in sorted(eval_root.glob("*.txt")):
         print(f"  {p}")
     if args.materialize_mix:
-        for p in sorted(mix_root.glob("*.txt")):
+        for p in sorted(mix_root.glob("*.jsonl")):
             if any(name in str(p) for name in grammar_names):
                 print(f"  {p}")
     if canonical_dump_path is not None:
