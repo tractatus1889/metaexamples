@@ -78,11 +78,9 @@ git clone https://github.com/tractatus1889/metaexamples.git
 cd metaexamples
 ```
 
-2) Create and activate a venv, install deps
+2) Install dependencies in the base environment
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
