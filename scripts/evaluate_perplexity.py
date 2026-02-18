@@ -212,16 +212,10 @@ def main() -> None:
     model = AutoModelForCausalLM.from_pretrained(args.model, trust_remote_code=True)
 
     split = args.split
-    def _eval_file(kind: str) -> Path:
-        base = Path("data/eval") / f"{args.grammar}_{kind}.txt"
-        wrapped = Path("data/eval") / f"{args.grammar}_{kind}_wrapped.txt"
-        return wrapped if wrapped.exists() else base
-
-    # Use wrapped variants when available to match wrapped training examples.
     valid_kind = "valid" if split == "val" else "test_valid"
     invalid_kind = "invalid" if split == "val" else "test_invalid"
-    valid_path = _eval_file(valid_kind)
-    invalid_path = _eval_file(invalid_kind)
+    valid_path = Path("data/eval") / f"{args.grammar}_{valid_kind}_wrapped.txt"
+    invalid_path = Path("data/eval") / f"{args.grammar}_{invalid_kind}_wrapped.txt"
     if not valid_path.exists() or not invalid_path.exists():
         raise FileNotFoundError(f"Missing eval split files for {args.grammar}: {valid_path}, {invalid_path}")
 

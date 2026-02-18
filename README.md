@@ -88,15 +88,11 @@ python3 scripts/generate_data.py \
   --n-train 10000 \
   --n-valid 1000 \
   --n-test 1000 \
-  --n-invalid-eval 1000 \
-  --write-wrapped-eval
+  --n-invalid-eval 1000
 ```
 
-`--write-wrapped-eval` adds wrapped versions for evaluation input files (for example `g1_test_valid_wrapped.txt`) so evaluation aligns with training wrappers.
-
-`scripts/run_experiment.py` calls `generate_data.py` with `--write-wrapped-eval` and automatically uses wrapped eval files when available.
-
-`scripts/evaluate_perplexity.py` also prefers wrapped eval files when present and falls back to raw files.
+`generate_data.py` writes wrapped eval files only, for example `g1_test_valid_wrapped.txt`.
+`run_experiment.py` and `evaluate_perplexity.py` use only wrapped eval files.
 
 3) Smoke train (single condition)
 
@@ -108,7 +104,7 @@ python3 scripts/generate_data.py \
   --output-dir checkpoints \
   --mix-ratio 0.1 \
   --max-steps 200 \
-  --eval-data data/eval/g1_test_valid.txt \
+  --eval-data data/eval/g1_test_valid_wrapped.txt \
   --eval-steps 50 \
   --train-logging-steps 25 \
   --save-steps 50

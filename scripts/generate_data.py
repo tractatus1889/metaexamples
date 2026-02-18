@@ -5,10 +5,10 @@ Generate training and evaluation corpora for g1/g2/g3.
 Output:
   data/corpora/{g}_examples.jsonl
   data/corpora/{g}_metaexamples_<ratio>pct.jsonl
-  data/eval/{g}_valid.txt
-  data/eval/{g}_invalid.txt
-  data/eval/{g}_test_valid.txt
-  data/eval/{g}_test_invalid.txt
+  data/eval/{g}_valid_wrapped.txt
+  data/eval/{g}_invalid_wrapped.txt
+  data/eval/{g}_test_valid_wrapped.txt
+  data/eval/{g}_test_invalid_wrapped.txt
 """
 
 from __future__ import annotations
@@ -53,11 +53,6 @@ def parse_args() -> argparse.Namespace:
         default="0.01,0.05,0.10",
         help="Ratios for metaexamples corpora (comma-separated)",
     )
-    parser.add_argument(
-        "--write-wrapped-eval",
-        action="store_true",
-        help="Also write wrapped versions of eval files with _wrapped suffix.",
-    )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -99,33 +94,27 @@ def main() -> None:
         write_jsonl(corpus_root / f"{name}_examples.jsonl", [{"text": s} for s in train_examples])
         print(f"  wrote {len(train_examples)} examples -> {name}_examples.jsonl")
 
-        # Validation and test pools are raw grammar strings without wrappers to simplify checks.
         val_valid = spec.generate_valid(args.n_valid, alphabet, args.seed + 1, min_len, max_len)
         val_invalid = spec.generate_invalid(args.n_invalid_eval, alphabet, args.seed + 2, min_len, max_len)
         test_valid = spec.generate_valid(args.n_test, alphabet, args.seed + 3, min_len, max_len)
         test_invalid = spec.generate_invalid(args.n_invalid_eval, alphabet, args.seed + 4, min_len, max_len)
 
-        write_lines(eval_root / f"{name}_valid.txt", val_valid)
-        write_lines(eval_root / f"{name}_invalid.txt", val_invalid)
-        write_lines(eval_root / f"{name}_test_valid.txt", test_valid)
-        write_lines(eval_root / f"{name}_test_invalid.txt", test_invalid)
-        if args.write_wrapped_eval:
-            write_lines(
-                eval_root / f"{name}_valid_wrapped.txt",
-                [wrap(name, s) for s in val_valid],
-            )
-            write_lines(
-                eval_root / f"{name}_invalid_wrapped.txt",
-                [wrap(name, s) for s in val_invalid],
-            )
-            write_lines(
-                eval_root / f"{name}_test_valid_wrapped.txt",
-                [wrap(name, s) for s in test_valid],
-            )
-            write_lines(
-                eval_root / f"{name}_test_invalid_wrapped.txt",
-                [wrap(name, s) for s in test_invalid],
-            )
+        write_lines(
+            eval_root / f"{name}_valid_wrapped.txt",
+            [wrap(name, s) for s in val_valid],
+        )
+        write_lines(
+            eval_root / f"{name}_invalid_wrapped.txt",
+            [wrap(name, s) for s in val_invalid],
+        )
+        write_lines(
+            eval_root / f"{name}_test_valid_wrapped.txt",
+            [wrap(name, s) for s in test_valid],
+        )
+        write_lines(
+            eval_root / f"{name}_test_invalid_wrapped.txt",
+            [wrap(name, s) for s in test_invalid],
+        )
         print(f"  wrote validation/eval files for {name}")
 
         meta_templates = spec.generate_metaexamples(alphabet, args.seed + 5, max_len)

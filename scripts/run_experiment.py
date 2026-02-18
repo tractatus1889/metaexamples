@@ -171,7 +171,6 @@ def run_generation(args, grammars, python_exec: str):
         ",".join(grammars),
         "--n-train",
         str(args.n_train),
-        "--write-wrapped-eval",
     ], python_exec)
 
 
@@ -192,11 +191,8 @@ def run_train_and_eval(args, grammar: str, condition: str, python_exec: str):
 
     if not args.eval_only:
         split = "test" if args.eval_split == "test" else "val"
-        base_name = f"{grammar}_{'valid' if split == 'val' else 'test_valid'}.txt"
-        eval_file = f"data/eval/{base_name}"
-        wrapped_eval = Path(f"data/eval/{base_name.removesuffix('.txt')}_wrapped.txt")
-        if wrapped_eval.exists():
-            eval_file = str(wrapped_eval)
+        eval_name = "test_valid_wrapped.txt" if split == "test" else "valid_wrapped.txt"
+        eval_file = f"data/eval/{grammar}_{eval_name}"
         logging_steps = resolve_logging_steps(args)
         run([
             "scripts/train.py",
