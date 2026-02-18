@@ -124,6 +124,25 @@ def create_synthetic_dataset(
     max_length: int,
 ) -> IterableDataset:
     import json
+    from pathlib import Path
+
+    corpus_file = Path(corpus_path)
+    if not corpus_file.exists():
+        available = []
+        if (corpus_file.parent.exists()):
+            available = sorted(p.name for p in corpus_file.parent.glob("*.jsonl"))
+        hint = ""
+        if available:
+            hint = (
+                "\nAvailable corpora in "
+                f"{corpus_file.parent}:\n"
+                + "\n".join(f"  - {item}" for item in available)
+            )
+        raise FileNotFoundError(
+            f"Missing synthetic corpus: {corpus_path}. {hint}\n"
+            "Generate it with:\n"
+            "  python3 scripts/generate_data.py --token-file data/tokens/selected_alphabet.json --grammars g1,g2,g3"
+        )
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         documents = [json.loads(line)["text"] for line in f if line.strip()]
@@ -153,6 +172,14 @@ def create_eval_dataset(
     tokenizer: AutoTokenizer,
     max_length: int,
 ):
+    from pathlib import Path
+
+    eval_file = Path(eval_path)
+    if not eval_file.exists():
+        raise FileNotFoundError(
+            f"Missing eval file: {eval_path}. "
+            f"Generate eval files with scripts/generate_data.py."
+        )
     with open(eval_path, "r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip()]
     if not lines:
