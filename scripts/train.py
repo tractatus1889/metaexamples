@@ -15,6 +15,7 @@ os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
 
 import argparse
+import json
 import inspect
 from pathlib import Path
 
@@ -107,6 +108,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-bf16", action="store_true", default=True)
     parser.add_argument("--no-bf16", dest="use_bf16", action="store_false")
     parser.add_argument("--trust-remote-code", action="store_true", default=True)
+    parser.add_argument(
+        "--metrics-log",
+        default=None,
+        help="Path to write train/eval metrics JSONL (default: <output-dir>/<run-name>/metrics.jsonl)",
+    )
 
     args = parser.parse_args()
     if args.config:
@@ -260,6 +266,48 @@ def interleave_with_ratio(
     ).shuffle(seed=seed, buffer_size=10_000)
 
 
+class MetricsLoggerCallback(TrainerCallback):
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = self.path.open("a", encoding="utf-8")
+        self._closed = False
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs:
+            return control
+
+        if "eval_loss" in logs or any(key.startswith("eval_") for key in logs.keys()):
+            self._write(state.global_step, "eval", logs)
+        elif "loss" in logs:
+            self._write(state.global_step, "train", logs)
+        return control
+
+    def _safe(self, value):
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        if isinstance(value, (list, tuple)):
+            return [self._safe(v) for v in value]
+        if isinstance(value, dict):
+            return {str(k): self._safe(v) for k, v in value.items()}
+        return str(value)
+
+    def _write(self, step: int, split: str, logs: dict):
+        if self._closed:
+            return
+        metric_payload = {k: self._safe(v) for k, v in logs.items()}
+        record = {"step": int(step), "split": split}
+        record.update(metric_payload)
+        self._file.write(json.dumps(record, ensure_ascii=False))
+        self._file.write("\n")
+        self._file.flush()
+
+    def close(self):
+        if not self._closed:
+            self._file.close()
+            self._closed = True
+
+
 class PeriodicEvalCallback(TrainerCallback):
     def __init__(self, eval_dataset, eval_steps: int):
         self.eval_dataset = eval_dataset
@@ -292,6 +340,9 @@ class PeriodicEvalCallback(TrainerCallback):
         self.last_eval_step = state.global_step
         pretty = {k: self._format_metric(v) for k, v in metrics.items()}
         print(f"Step {state.global_step} eval metrics: {pretty}")
+        if hasattr(self, "metrics_logger") and self.metrics_logger is not None:
+            self.metrics_logger._write(state.global_step, "eval", metrics)
+        return metrics
 
     def _logged_already(self, trainer, step):
         log_history = getattr(trainer.state, "log_history", [])
@@ -385,14 +436,15 @@ def main() -> None:
 
     output_dir = Path(args.output_dir) / args.run_name
 
+    metrics_log_path = Path(args.metrics_log) if args.metrics_log else output_dir / "metrics.jsonl"
+    metrics_logger = MetricsLoggerCallback(metrics_log_path)
+
     def data_collator(features):
         batch = tokenizer.pad(features, return_tensors="pt", padding=True)
         labels = batch["input_ids"].clone()
         labels[batch["attention_mask"] == 0] = -100
         batch["labels"] = labels
         return batch
-
-    eval_callback = PeriodicEvalCallback(eval_dataset, args.eval_steps) if eval_dataset is not None else None
 
     training_kwargs = {
         "output_dir": str(output_dir),
@@ -432,6 +484,16 @@ def main() -> None:
     elif eval_dataset is not None:
         print("Using periodic callback-based eval scheduling.")
 
+    eval_callback = None
+    if eval_dataset is not None and not has_builtin_eval:
+        eval_callback = PeriodicEvalCallback(eval_dataset, args.eval_steps)
+        eval_callback.metrics_logger = metrics_logger
+
+    trainer_accepts_callbacks = "callbacks" in inspect.signature(Trainer.__init__).parameters
+    callbacks = [metrics_logger]
+    if eval_callback is not None:
+        callbacks.append(eval_callback)
+
     training_args = TrainingArguments(**training_kwargs)
 
     trainer_kwargs = {
@@ -441,21 +503,31 @@ def main() -> None:
         "data_collator": data_collator,
         "eval_dataset": eval_dataset,
     }
-    if eval_callback is not None and "callbacks" in inspect.signature(Trainer.__init__).parameters:
-        trainer_kwargs["callbacks"] = [eval_callback]
+    if trainer_accepts_callbacks:
+        trainer_kwargs["callbacks"] = callbacks
 
     trainer = Trainer(**trainer_kwargs)
+    if not trainer_accepts_callbacks:
+        for callback in callbacks:
+            trainer.add_callback(callback)
     if eval_callback is not None:
         eval_callback._trainer = trainer
-        if "callbacks" not in inspect.signature(Trainer.__init__).parameters:
-            trainer.add_callback(eval_callback)
 
     print(f"Starting training, output -> {output_dir}")
+    print(f"Metrics log: {metrics_log_path}")
     trainer.train()
 
     if eval_dataset is not None:
         final_eval_metrics = trainer.evaluate()
         print(f"Final eval metrics: {final_eval_metrics}")
+        if hasattr(metrics_logger, "_write"):
+            metrics_logger._write(
+                int(getattr(trainer.state, "global_step", 0)),
+                "eval",
+                final_eval_metrics,
+            )
+
+    metrics_logger.close()
 
     trainer.save_model(str(output_dir / "final"))
     tokenizer.save_pretrained(str(output_dir / "final"))

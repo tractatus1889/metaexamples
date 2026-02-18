@@ -94,7 +94,7 @@ python3 scripts/generate_data.py \
 3) Smoke train (single condition)
 
 ```bash
-python3 scripts/train.py \
+ python3 scripts/train.py \
   --model-id allenai/OLMo-1B-hf \
   --corpus data/corpora/g1_examples.jsonl \
   --run-name olmo-1b_g1_smoke \
@@ -112,6 +112,10 @@ If `--eval-data` is set and `--eval-steps` is provided, `scripts/train.py` now p
 every `eval_steps`, including `eval_loss`.
 Set `--train-logging-steps` smaller if you want more frequent train metrics (or use `--logging-steps` as a backward-compatible alias).
 After training, `scripts/train.py` also runs one final `evaluate()` and prints `Final eval metrics: ...`.
+To persist both train/eval metrics on disk, `train.py` writes JSONL entries to:
+`checkpoints/<run-name>/metrics.jsonl` by default.
+Pass `--metrics-log <path>` to change the output file.
+Each row includes `step`, `split` (`train`/`eval`), and the metrics present in that log entry.
 
 4) Validate smoke model
 
@@ -144,6 +148,7 @@ python3 scripts/run_experiment.py \
 - `--save-steps`: checkpoint interval in training.
 - `--train-logging-steps`: train metrics logging interval.
 - `--logging-steps`: backward-compatible alias for `--train-logging-steps`.
+- `--metrics-log`: optional path for JSONL train/eval metric log (default `<output-dir>/<run-name>/metrics.jsonl`).
 
 What “Writing model shards” means:
 - `Writing model shards` is a normal checkpoint save log from Hugging Face.
