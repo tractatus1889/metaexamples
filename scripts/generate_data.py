@@ -22,6 +22,10 @@ from pathlib import Path
 from typing import List
 
 from datasets import load_dataset
+try:
+    from tqdm.auto import tqdm
+except ImportError:  # pragma: no cover - optional fallback
+    tqdm = None
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -153,7 +157,10 @@ def _write_canonical_dump(
 
     count = 0
     with canonical_path.open("w", encoding="utf-8") as f:
-        for row in dataset:
+        iterator = dataset
+        if tqdm is not None:
+            iterator = tqdm(dataset, total=target_count, desc="Writing canonical samples")
+        for row in iterator:
             if count >= target_count:
                 break
             if not isinstance(row, dict):
