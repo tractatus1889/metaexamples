@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Write generated samples and per-sample validity to output JSON.",
     )
+    parser.add_argument(
+        "--seed-with-symbol",
+        action="store_true",
+        help="Add prompts beginning with one valid symbol after the grammar start tag, e.g. <g1> Ā.",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument(
         "--token-file",
@@ -55,11 +60,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_prompt(grammar: str) -> List[str]:
+def _load_prompt(grammar: str, alphabet: List[str], seed_with_symbol: bool) -> List[str]:
     if grammar not in GRAMMARS:
         raise ValueError(f"Unknown grammar {grammar}")
     spec = GRAMMARS[grammar]
-    return [spec.doc_start]
+    prompts = [spec.doc_start]
+    if seed_with_symbol:
+        prompts.extend(f"{spec.doc_start} {token}" for token in alphabet)
+    return prompts
 
 
 def _extract_inner(grammar: str, text: str) -> str:
@@ -71,8 +79,7 @@ def _extract_inner(grammar: str, text: str) -> str:
 def generate(
     model,
     tokenizer,
-    prompts: List[str],
-    n_per_prompt: int,
+    prompts_to_counts: Dict[str, int],
     max_length: int,
     temperature: float,
     top_p: float,
@@ -83,8 +90,7 @@ def generate(
     model.to(device)
 
     samples = []
-    for prompt in tqdm(prompts, desc="prompts"):
-        remaining = n_per_prompt
+    for prompt, remaining in tqdm(prompts_to_counts.items(), desc="prompts"):
         while remaining > 0:
             n = min(batch_size, remaining)
             inputs = tokenizer([prompt] * n, return_tensors="pt", padding=True).to(device)
@@ -103,6 +109,22 @@ def generate(
                 samples.append({"prompt": prompt, "generated": decoded})
             remaining -= n
     return samples
+
+
+def _allocate_counts(prompts: List[str], n_samples: int) -> Dict[str, int]:
+    if not prompts:
+        raise ValueError("No prompts provided")
+    if n_samples < len(prompts):
+        raise ValueError(
+            f"n-samples ({n_samples}) is smaller than prompt count ({len(prompts)}). "
+            "Increase --n-samples or disable --seed-with-symbol."
+        )
+
+    q, r = divmod(n_samples, len(prompts))
+    counts = {}
+    for i, prompt in enumerate(prompts):
+        counts[prompt] = q + (1 if i < r else 0)
+    return counts
 
 
 def main() -> None:
@@ -130,13 +152,17 @@ def main() -> None:
         torch_dtype=torch.float16 if args.device == "cuda" else torch.float32,
     )
 
-    prompts = _load_prompt(args.grammar)
-    n_per_prompt = max(1, args.n_samples // len(prompts))
+    prompts = _load_prompt(args.grammar, alphabet, args.seed_with_symbol)
+    prompts_to_counts = _allocate_counts(prompts, args.n_samples)
+
+    seeded_count = sum(1 for p in prompts if p != prompts[0] and p.startswith(f"{prompts[0]} "))
+    if seeded_count > 0:
+        print(f"Using seed-with-symbol prompts for {seeded_count} symbols.")
+
     samples = generate(
         model=model,
         tokenizer=tokenizer,
-        prompts=prompts,
-        n_per_prompt=n_per_prompt,
+        prompts_to_counts=prompts_to_counts,
         max_length=args.max_length,
         temperature=args.temperature,
         top_p=args.top_p,
