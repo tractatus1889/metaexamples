@@ -36,7 +36,65 @@ The default scoring prioritizes rare token IDs (as an approximation to low-frequ
 pip install -r requirements.txt
 ```
 
-## Quick start (planning to run on Lambda)
+## Quick start on Lambda (GH200)
+
+These are recommended commands for the GH200 instance:
+
+```bash
+git clone https://github.com/tractatus1889/metaexamples.git
+cd metaexamples
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+python - <<'PY'
+import torch
+print("cuda:", torch.cuda.is_available())
+print("device:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none")
+print("dtype:", torch.cuda.get_device_capability(0) if torch.cuda.is_available() else "none")
+PY
+```
+
+Generate full-size data (recommended before real runs):
+
+```bash
+python scripts/generate_data.py \
+  --token-file data/tokens/selected_alphabet.json \
+  --grammars g1,g2,g3 \
+  --n-train 10000 \
+  --n-valid 1000 \
+  --n-test 1000 \
+  --n-invalid-eval 1000
+```
+
+Smoke test one condition:
+
+```bash
+python scripts/run_experiment.py \
+  --model-id allenai/OLMo-1B-hf \
+  --run-only g1 \
+  --conditions examples \
+  --max-steps 200 \
+  --eval-split test
+```
+
+Run full matrix:
+
+```bash
+python scripts/run_experiment.py \
+  --model-id allenai/OLMo-1B-hf \
+  --grammars g1,g2,g3 \
+  --conditions examples,meta_1pct,meta_5pct,meta_10pct \
+  --max-steps 2000 \
+  --eval-split test
+```
+
+`run_experiment.py` now performs both:
+- in-training evaluation (`--eval-data` with `--eval-split`), logging `eval_loss`.
+- final `evaluate_perplexity.py` (PPL + discrimination metrics).
+- final `evaluate_generation.py` (generation validity rate).
+
+## Quick start (local)
 
 1. Select symbol inventory:
 
