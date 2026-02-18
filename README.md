@@ -122,6 +122,7 @@ Each row includes `step`, `split` (`train`/`eval`), and the metrics present in t
 ```bash
 python3 scripts/evaluate_perplexity.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --split test
 python3 scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --n-samples 5000
+python3 scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --save-samples
 ```
 
 5) Full matrix (all grammars + all conditions)
@@ -157,6 +158,7 @@ python3 scripts/run_experiment.py \
 - `--max-generation-length`: generation max length in eval generation.
 - `--perplexity-max-length`: tokenization max length for perplexity eval.
 - `--metrics-log`: optional path for JSONL train/eval metric log (default `<output-dir>/<run-name>/metrics.jsonl`).
+- `--save-samples` (evaluate_generation.py): include raw generated rows in output JSON (may be large, off by default).
 - `--trust-remote-code` / `--no-trust-remote-code`: control HF model/tokenizer trust_remote_code setting.
 
 Example full run with the explicit experiment-level tuning flags:

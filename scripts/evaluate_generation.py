@@ -40,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument(
+        "--save-samples",
+        action="store_true",
+        help="Write generated samples and per-sample validity to output JSON.",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument(
         "--token-file",
@@ -153,6 +158,8 @@ def main() -> None:
             min_len=DEFAULT_MIN_LEN,
             max_len=DEFAULT_MAX_LEN,
         )
+        sample["extracted"] = extracted
+        sample["is_valid"] = is_valid
         if is_valid:
             valid_count += 1
             per_prompt[prompt]["valid"] += 1
@@ -167,6 +174,9 @@ def main() -> None:
         "validity_rate": valid_count / total if total else 0.0,
         "by_prompt": per_prompt,
     }
+
+    if args.save_samples:
+        results["samples"] = samples
 
     print(f"\n{args.grammar} generation validity: {results['validity_rate'] * 100:.2f}% "
           f"({results['valid']}/{results['n_samples']})")
