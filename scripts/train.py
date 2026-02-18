@@ -244,8 +244,14 @@ def create_canonical_dataset(
     text_key: str = "text",
     streaming: bool = True,
 ):
-    dataset_path = Path(name)
+    dataset_path = Path(name).expanduser()
+    if not dataset_path.is_absolute() and not dataset_path.exists():
+        candidate = Path(__file__).resolve().parents[1] / dataset_path
+        if candidate.exists():
+            dataset_path = candidate
+
     if dataset_path.exists():
+        print(f"Using canonical local dataset file: {dataset_path}")
         if dataset_path.suffix.lower() in {".txt", ".text"}:
             dataset = load_dataset("text", data_files=str(dataset_path), split="train")
         elif dataset_path.suffix.lower() in {".jsonl", ".json"}:
@@ -263,6 +269,7 @@ def create_canonical_dataset(
             )
         return dataset.map(tokenize, batched=True, remove_columns=dataset.column_names)
 
+    print(f"Using canonical HF dataset: {name} ({config})")
     dataset = load_dataset(
         name,
         config,
