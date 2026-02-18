@@ -338,6 +338,9 @@ def main() -> None:
         if "evaluation_strategy" in train_args_signature:
             training_kwargs["evaluation_strategy"] = "steps"
             training_kwargs["eval_steps"] = args.eval_steps
+        elif "eval_strategy" in train_args_signature:
+            training_kwargs["eval_strategy"] = "steps"
+            training_kwargs["eval_steps"] = args.eval_steps
         elif "do_eval" in train_args_signature:
             training_kwargs["do_eval"] = True
             if "eval_steps" in train_args_signature:
@@ -354,6 +357,11 @@ def main() -> None:
 
     print(f"Starting training, output -> {output_dir}")
     trainer.train()
+
+    if eval_dataset is not None:
+        final_eval_metrics = trainer.evaluate()
+        print(f"Final eval metrics: {final_eval_metrics}")
+
     trainer.save_model(str(output_dir / "final"))
     tokenizer.save_pretrained(str(output_dir / "final"))
     print(f"Training complete: {output_dir / 'final'}")

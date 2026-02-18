@@ -103,8 +103,13 @@ python3 scripts/train.py \
   --max-steps 200 \
   --eval-data data/eval/g1_test_valid.txt \
   --eval-steps 50 \
+  --logging-steps 25 \
   --save-steps 50
 ```
+
+If `--eval-data` is set and `--eval-steps` is provided, the trainer will print `eval_loss` during training at the eval cadence.
+Set `--logging-steps` smaller if you want more frequent train metrics.
+Note: after training, `scripts/train.py` always runs one final `evaluate()` pass and prints `Final eval metrics: ...` so you can still get `eval_loss` even if in-step eval logging is not emitted by your local Transformers version.
 
 4) Validate smoke model
 
@@ -128,12 +133,18 @@ python3 scripts/run_experiment.py \
 
 ## Useful flags
 
-- `--synthetic-mix-ratio 0.1`: synthetic fraction in training stream.
+- `--mix-ratio 0.1` (train.py): synthetic fraction in mixed training stream.
+- `--synthetic-mix-ratio` (run_experiment.py): synthetic fraction in training matrix conditions.
 - `--conditions examples,meta_1pct,meta_5pct,meta_10pct`: run matrix.
 - `--run-only g1`: limit to one grammar.
 - `--train-only` / `--eval-only`: split training and evaluation.
 - `--eval-steps`: validation interval in training.
 - `--save-steps`: checkpoint interval in training.
+- `--logging-steps`: train metrics logging interval.
+
+What “Writing model shards” means:
+- `Writing model shards` is a normal checkpoint save log from Hugging Face.
+- Your model is being serialized into multiple files (shards) under the output directory and this is expected for large models.
 
 ## Troubleshooting (short)
 
