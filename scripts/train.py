@@ -269,6 +269,9 @@ class PeriodicEvalCallback(TrainerCallback):
             or state.global_step % self.eval_steps != 0
         ):
             return
+        if self._logged_already(trainer, state.global_step):
+            self.last_eval_step = state.global_step
+            return
         if state.global_step == self.last_eval_step:
             return
 
@@ -276,6 +279,13 @@ class PeriodicEvalCallback(TrainerCallback):
         self.last_eval_step = state.global_step
         pretty = {k: self._format_metric(v) for k, v in metrics.items()}
         print(f"Step {state.global_step} eval metrics: {pretty}")
+
+    def _logged_already(self, trainer, step):
+        log_history = getattr(trainer.state, "log_history", [])
+        for entry in log_history:
+            if entry.get("step") == step and "eval_loss" in entry:
+                return True
+        return False
 
     def on_train_begin(self, args, state, control, **kwargs):
         self._trainer = kwargs.get("trainer")
@@ -369,7 +379,7 @@ def main() -> None:
         batch["labels"] = labels
         return batch
 
-    eval_callback = None
+    eval_callback = PeriodicEvalCallback(eval_dataset, args.eval_steps) if eval_dataset is not None else None
 
     training_kwargs = {
         "output_dir": str(output_dir),
@@ -404,21 +414,28 @@ def main() -> None:
                 training_kwargs["eval_steps"] = args.eval_steps
             has_builtin_eval = True
 
-    if eval_dataset is not None and not has_builtin_eval:
-        eval_callback = PeriodicEvalCallback(eval_dataset, args.eval_steps)
+    if eval_dataset is not None and has_builtin_eval:
+        print("Using built-in eval scheduling from TrainingArguments.")
+    elif eval_dataset is not None:
+        print("Using periodic callback-based eval scheduling.")
 
     training_args = TrainingArguments(**training_kwargs)
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        data_collator=data_collator,
-        eval_dataset=eval_dataset,
-    )
+    trainer_kwargs = {
+        "model": model,
+        "args": training_args,
+        "train_dataset": train_dataset,
+        "data_collator": data_collator,
+        "eval_dataset": eval_dataset,
+    }
+    if eval_callback is not None and "callbacks" in inspect.signature(Trainer.__init__).parameters:
+        trainer_kwargs["callbacks"] = [eval_callback]
+
+    trainer = Trainer(**trainer_kwargs)
     if eval_callback is not None:
         eval_callback._trainer = trainer
-        trainer.add_callback(eval_callback)
+        if "callbacks" not in inspect.signature(Trainer.__init__).parameters:
+            trainer.add_callback(eval_callback)
 
     print(f"Starting training, output -> {output_dir}")
     trainer.train()
