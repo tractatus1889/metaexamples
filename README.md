@@ -91,8 +91,24 @@ python3 scripts/generate_data.py \
   --n-invalid-eval 1000
 ```
 
+Optional: generate a local canonical corpus once and reuse it for all runs.
+
+```bash
+python3 scripts/generate_data.py \
+  --token-file data/tokens/selected_alphabet.json \
+  --grammars g1,g2,g3 \
+  --n-train 10000 \
+  --canonical-dataset allenai/c4 \
+  --canonical-config en \
+  --canonical-split train \
+  --canonical-text-key text \
+  --canonical-count 2000000 \
+  --canonical-output data/canonical/c4_train_2m.txt
+```
+
 `generate_data.py` writes wrapped eval files only, for example `g1_test_valid_wrapped.txt`.
 `run_experiment.py` and `evaluate_perplexity.py` use only wrapped eval files.
+Canonical examples are written to a plain text file (one sample per line) and can be consumed directly via `--canonical-dataset`.
 
 3) Smoke train (single condition)
 
@@ -100,6 +116,7 @@ python3 scripts/generate_data.py \
  python3 scripts/train.py \
   --model-id allenai/OLMo-1B-hf \
   --corpus data/corpora/g1_examples.jsonl \
+  --canonical-dataset data/canonical/c4_train_2m.txt \
   --run-name olmo-1b_g1_smoke \
   --output-dir checkpoints \
   --mix-ratio 0.1 \
@@ -136,6 +153,7 @@ python3 scripts/run_experiment.py \
   --model-id allenai/OLMo-1B-hf \
   --grammars g1,g2,g3 \
   --conditions examples,meta_1pct,meta_5pct,meta_10pct \
+  --canonical-dataset data/canonical/c4_train_2m.txt \
   --max-steps 2000 \
   --eval-split test
 ```
@@ -145,6 +163,12 @@ python3 scripts/run_experiment.py \
 ## Useful flags
 
 - `--mix-ratio 0.1` (train.py): synthetic fraction in mixed training stream.
+- `--canonical-dataset`: HF dataset id/config for canonical text, or path to a local generated file.
+- `--canonical-config`: HF dataset config when canonical dataset is remote.
+- `--canonical-text-key`: field from remote canonical dataset to use.
+- `--canonical-count`: optional sample count when generating local canonical data via `generate_data.py` or `run_experiment`.
+- `--canonical-output`: optional local canonical output path.
+- `--canonical-streaming` / `--no-canonical-streaming`: control remote canonical dataset streaming in train.py/run_experiment.
 - `--synthetic-mix-ratio` (run_experiment.py): synthetic fraction in training matrix conditions.
 - `--conditions examples,meta_1pct,meta_5pct,meta_10pct`: run matrix.
 - `--run-only g1`: limit to one grammar.

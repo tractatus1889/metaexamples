@@ -9,15 +9,19 @@ Output:
   data/eval/{g}_invalid_wrapped.txt
   data/eval/{g}_test_valid_wrapped.txt
   data/eval/{g}_test_invalid_wrapped.txt
+  data/canonical/<dataset>_<config>_<split>_<count>_<seed>.txt (optional)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import List
+
+from datasets import load_dataset
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -49,6 +53,37 @@ def parse_args() -> argparse.Namespace:
         help="Invalid samples for val/test eval sets",
     )
     parser.add_argument(
+        "--canonical-dataset",
+        default="allenai/c4",
+        help="HF dataset id for optional canonical local dump",
+    )
+    parser.add_argument(
+        "--canonical-config",
+        default="en",
+        help="HF config for optional canonical local dump",
+    )
+    parser.add_argument(
+        "--canonical-split",
+        default="train",
+        help="HF split for optional canonical local dump",
+    )
+    parser.add_argument(
+        "--canonical-text-key",
+        default="text",
+        help="Field to read as text in canonical dump",
+    )
+    parser.add_argument(
+        "--canonical-count",
+        type=int,
+        default=0,
+        help="If > 0, generate this many local canonical examples",
+    )
+    parser.add_argument(
+        "--canonical-output",
+        default=None,
+        help="Output path for canonical dump (defaults under data/canonical)",
+    )
+    parser.add_argument(
         "--meta-ratios",
         default="0.01,0.05,0.10",
         help="Ratios for metaexamples corpora (comma-separated)",
@@ -64,6 +99,77 @@ def load_alphabet(path: Path) -> List[str]:
     if not isinstance(alphabet, list) or len(alphabet) < 5:
         raise ValueError(f"token file {path} must contain at least 5 tokens in 'alphabet'")
     return list(alphabet[:5])
+
+
+def _safe_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _dataset_slug(dataset_name: str, config: str, split: str) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", dataset_name).strip("._-") or "dataset"
+    safe_config = re.sub(r"[^A-Za-z0-9._-]+", "_", config) or "default"
+    safe_split = re.sub(r"[^A-Za-z0-9._-]+", "_", split) or "split"
+    return f"{safe_name}_{safe_config}_{safe_split}"
+
+
+def _write_canonical_dump(
+    dataset_name: str,
+    config: str,
+    split: str,
+    text_key: str,
+    target_count: int,
+    canonical_output: str | None,
+    seed: int,
+) -> Path:
+    if target_count <= 0:
+        raise ValueError("canonical-count must be > 0")
+
+    root = Path("data/canonical")
+    root.mkdir(parents=True, exist_ok=True)
+    canonical_path = Path(
+        canonical_output
+        if canonical_output is not None
+        else root / f"{_dataset_slug(dataset_name, config, split)}_{target_count}_{seed}.txt"
+    )
+    canonical_path.parent.mkdir(parents=True, exist_ok=True)
+
+    dataset = load_dataset(
+        dataset_name,
+        config,
+        split=split,
+        streaming=True,
+        trust_remote_code=True,
+    )
+
+    columns = dataset.column_names
+    if not columns:
+        raise ValueError(f"Dataset {dataset_name} appears empty")
+    if text_key not in columns:
+        text_key = columns[0]
+
+    count = 0
+    with canonical_path.open("w", encoding="utf-8") as f:
+        for row in dataset:
+            if count >= target_count:
+                break
+            if not isinstance(row, dict):
+                continue
+            text = _safe_text(row.get(text_key))
+            if not text:
+                continue
+            f.write(text.replace("\n", " ") + "\n")
+            count += 1
+
+    if count < target_count:
+        print(
+            f"Warning: requested {target_count} canonical examples but only wrote {count}"
+        )
+    print(f"  wrote {count} canonical samples -> {canonical_path}")
+    return canonical_path
 
 
 def main() -> None:
@@ -135,12 +241,26 @@ def main() -> None:
             write_jsonl(corpus_path, [{"text": s} for s in mixed])
             print(f"  wrote {len(mixed)} mixed docs -> {corpus_path.name}")
 
+    canonical_dump_path: Path | None = None
+    if args.canonical_count > 0:
+        canonical_dump_path = _write_canonical_dump(
+            args.canonical_dataset,
+            args.canonical_config,
+            args.canonical_split,
+            args.canonical_text_key,
+            args.canonical_count,
+            args.canonical_output,
+            args.seed,
+        )
+
     # Summary
     print("\nDone. Generated files:")
     for p in sorted(corpus_root.glob("*.jsonl")):
         print(f"  {p}")
     for p in sorted(eval_root.glob("*.txt")):
         print(f"  {p}")
+    if canonical_dump_path is not None:
+        print(f"  {canonical_dump_path}")
 
 
 if __name__ == "__main__":

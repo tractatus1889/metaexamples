@@ -72,6 +72,19 @@ def parse_args() -> argparse.Namespace:
         help="Field to tokenize in canonical dataset",
     )
     parser.add_argument(
+        "--canonical-streaming",
+        dest="canonical_streaming",
+        action="store_true",
+        help="Use streaming mode for canonical HF dataset (default).",
+    )
+    parser.add_argument(
+        "--no-canonical-streaming",
+        dest="canonical_streaming",
+        action="store_false",
+        help="Load canonical HF dataset eagerly (non-streaming).",
+    )
+    parser.set_defaults(canonical_streaming=True)
+    parser.add_argument(
         "--mix-ratio",
         type=float,
         default=0.10,
@@ -229,15 +242,37 @@ def create_canonical_dataset(
     tokenizer: AutoTokenizer,
     max_length: int,
     text_key: str = "text",
+    streaming: bool = True,
 ):
+    dataset_path = Path(name)
+    if dataset_path.exists():
+        if dataset_path.suffix.lower() in {".txt", ".text"}:
+            dataset = load_dataset("text", data_files=str(dataset_path), split="train")
+        elif dataset_path.suffix.lower() in {".jsonl", ".json"}:
+            dataset = load_dataset("json", data_files=str(dataset_path), split="train")
+        else:
+            dataset = load_dataset("text", data_files=str(dataset_path), split="train")
+        if text_key not in dataset.column_names:
+            text_key = dataset.column_names[0] if dataset.column_names else "text"
+        def tokenize(batch):
+            return tokenizer(
+                batch[text_key],
+                truncation=True,
+                max_length=max_length,
+                return_special_tokens_mask=True,
+            )
+        return dataset.map(tokenize, batched=True, remove_columns=dataset.column_names)
+
     dataset = load_dataset(
         name,
         config,
         split="train",
-        streaming=True,
+        streaming=streaming,
         trust_remote_code=True,
     )
 
+    # For non-streaming datasets, avoid dropping columns before shuffle/truncation
+    # and keep map behavior consistent with IterableDataset path.
     columns = dataset.column_names
     if text_key not in columns:
         if len(columns) == 0:
@@ -405,13 +440,19 @@ def main() -> None:
         trust_remote_code=args.trust_remote_code,
     )
 
-    canonical_dataset = create_canonical_dataset(
-        args.canonical_dataset,
-        args.canonical_config,
-        tokenizer,
-        args.max_seq_length,
-        text_key=args.canonical_text_key,
-    )
+    canonical_dataset = None
+    canonical_path = Path(args.canonical_dataset)
+    if args.corpus and args.mix_ratio >= 1.0:
+        print("mix-ratio is 1.0, skipping canonical dataset load for speed")
+    else:
+        canonical_dataset = create_canonical_dataset(
+            args.canonical_dataset,
+            args.canonical_config,
+            tokenizer,
+            args.max_seq_length,
+            text_key=args.canonical_text_key,
+            streaming=args.canonical_streaming,
+        )
 
     if args.corpus:
         synthetic_dataset = create_synthetic_dataset(
@@ -419,12 +460,17 @@ def main() -> None:
             tokenizer,
             args.max_seq_length,
         )
-        train_dataset = interleave_with_ratio(
-            canonical_dataset,
-            synthetic_dataset,
-            args.mix_ratio,
-            seed=args.seed,
-        )
+        if args.mix_ratio >= 1.0:
+            train_dataset = synthetic_dataset
+        else:
+            if canonical_dataset is None:
+                raise RuntimeError("Canonical dataset is required when mix-ratio < 1.0")
+            train_dataset = interleave_with_ratio(
+                canonical_dataset,
+                synthetic_dataset,
+                args.mix_ratio,
+                seed=args.seed,
+            )
     else:
         print("No corpus specified, training on canonical stream only")
         train_dataset = canonical_dataset.shuffle(seed=args.seed, buffer_size=10_000)
