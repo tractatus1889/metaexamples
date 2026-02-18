@@ -15,6 +15,7 @@ os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
 
 import argparse
+import inspect
 from pathlib import Path
 
 try:
@@ -368,9 +369,7 @@ def main() -> None:
         batch["labels"] = labels
         return batch
 
-    eval_callbacks = []
-    if eval_dataset is not None:
-        eval_callbacks.append(PeriodicEvalCallback(eval_dataset, args.eval_steps))
+    eval_callback = None
 
     training_kwargs = {
         "output_dir": str(output_dir),
@@ -388,6 +387,26 @@ def main() -> None:
         "report_to": "tensorboard",
         "remove_unused_columns": False,
     }
+    has_builtin_eval = False
+    if eval_dataset is not None:
+        train_args_signature = inspect.signature(TrainingArguments.__init__).parameters
+        if "evaluation_strategy" in train_args_signature:
+            training_kwargs["evaluation_strategy"] = "steps"
+            training_kwargs["eval_steps"] = args.eval_steps
+            has_builtin_eval = True
+        elif "eval_strategy" in train_args_signature:
+            training_kwargs["eval_strategy"] = "steps"
+            training_kwargs["eval_steps"] = args.eval_steps
+            has_builtin_eval = True
+        elif "do_eval" in train_args_signature:
+            training_kwargs["do_eval"] = True
+            if "eval_steps" in train_args_signature:
+                training_kwargs["eval_steps"] = args.eval_steps
+            has_builtin_eval = True
+
+    if eval_dataset is not None and not has_builtin_eval:
+        eval_callback = PeriodicEvalCallback(eval_dataset, args.eval_steps)
+
     training_args = TrainingArguments(**training_kwargs)
 
     trainer = Trainer(
@@ -396,10 +415,10 @@ def main() -> None:
         train_dataset=train_dataset,
         data_collator=data_collator,
         eval_dataset=eval_dataset,
-        callbacks=eval_callbacks,
     )
-    for cb in eval_callbacks:
-        cb._trainer = trainer
+    if eval_callback is not None:
+        eval_callback._trainer = trainer
+        trainer.add_callback(eval_callback)
 
     print(f"Starting training, output -> {output_dir}")
     trainer.train()
