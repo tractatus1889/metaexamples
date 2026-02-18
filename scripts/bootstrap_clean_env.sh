@@ -35,8 +35,8 @@ export TRANSFORMERS_NO_TF=1
 echo "Upgrading pip/setuptools/wheel"
 python -m pip install --upgrade pip setuptools wheel
 
-echo "Installing PyTorch + CUDA wheels"
-python -m pip install torch torchvision --index-url "$CUDA_WHEEL_URL"
+echo "Installing torch (CUDA wheels)"
+python -m pip install torch --index-url "$CUDA_WHEEL_URL"
 
 echo "Installing project dependencies"
 python -m pip install -r requirements.txt

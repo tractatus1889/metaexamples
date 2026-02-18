@@ -137,4 +137,5 @@ python3 scripts/run_experiment.py \
 ## Troubleshooting (short)
 
 - Use `python3` (not `/usr/bin/python3`) for all commands.
+- `torchvision` is not required for this project. If you see torch/vision version conflicts, uninstall vision with `pip uninstall -y torchvision`.
 - If your environment is still broken, rerun bootstrap with `--fresh` and delete/recreate the venv.
