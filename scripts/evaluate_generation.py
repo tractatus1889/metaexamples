@@ -81,6 +81,25 @@ def _extract_inner(grammar: str, text: str) -> str:
     return extracted.split("\n", 1)[0].strip()
 
 
+def _prepare_prompt_batch(
+    tokenizer,
+    prompt: str,
+    batch_size: int,
+    device: str,
+) -> Dict[str, torch.Tensor]:
+    encoded = tokenizer(prompt, return_tensors="pt", padding=False)
+    input_ids = encoded["input_ids"]
+    attention_mask = encoded.get("attention_mask", torch.ones_like(input_ids))
+
+    if input_ids.numel() == 0 or input_ids.shape[-1] == 0:
+        raise ValueError(f"Prompt encoded to zero tokens: {prompt!r}")
+
+    return {
+        "input_ids": input_ids.expand(batch_size, -1).clone().to(device),
+        "attention_mask": attention_mask.expand(batch_size, -1).clone().to(device),
+    }
+
+
 def generate(
     model,
     tokenizer,
@@ -96,23 +115,46 @@ def generate(
 
     samples = []
     for prompt, remaining in tqdm(prompts_to_counts.items(), desc="prompts"):
-        prompt_tokens = tokenizer(prompt, return_tensors="pt", padding=False)["input_ids"]
-        if prompt_tokens.numel() == 0 or prompt_tokens.shape[-1] == 0:
-            raise ValueError(f"Prompt encoded to zero tokens: {prompt!r}.")
         max_new_tokens = max(1, int(max_length))
         while remaining > 0:
             n = min(batch_size, remaining)
-            inputs = tokenizer([prompt] * n, return_tensors="pt", padding=True).to(device)
+            try:
+                batch_inputs = _prepare_prompt_batch(tokenizer, prompt, n, device)
+            except ValueError:
+                # Keep behavior deterministic and continue with remaining prompts.
+                print(f"Skipping empty prompt: {prompt!r}")
+                break
+
             with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=True,
-                    temperature=temperature,
-                    top_p=top_p,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                )
+                try:
+                    outputs = model.generate(
+                        input_ids=batch_inputs["input_ids"],
+                        attention_mask=batch_inputs["attention_mask"],
+                        max_new_tokens=max_new_tokens,
+                        do_sample=True,
+                        temperature=temperature,
+                        top_p=top_p,
+                        pad_token_id=tokenizer.pad_token_id,
+                        eos_token_id=tokenizer.eos_token_id,
+                    )
+                except RuntimeError as exc:
+                    # Some OLMo/transformers versions can fail on a specific batch shape.
+                    if n == 1:
+                        raise
+                    print(f"Batch generate failed for {prompt!r} at n={n}: {exc}")
+                    print("Retrying this prompt one-by-one...")
+                    n = 1
+                    batch_inputs = _prepare_prompt_batch(tokenizer, prompt, n, device)
+                    outputs = model.generate(
+                        input_ids=batch_inputs["input_ids"],
+                        attention_mask=batch_inputs["attention_mask"],
+                        max_new_tokens=max_new_tokens,
+                        do_sample=True,
+                        temperature=temperature,
+                        top_p=top_p,
+                        pad_token_id=tokenizer.pad_token_id,
+                        eos_token_id=tokenizer.eos_token_id,
+                    )
             for output in outputs:
                 decoded = tokenizer.decode(output, skip_special_tokens=True)
                 samples.append({"prompt": prompt, "generated": decoded})
