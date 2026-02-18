@@ -284,7 +284,7 @@ def g2_generate_metaexamples(
         "g2 language: valid strings use only symbols from the set.",
         f"Every symbol in g2 must appear an even number of times.",
         f"g2 allows lengths from {min_len} to {max_len}, provided all parity constraints hold.",
-        "If one symbol is odd, the string is invalid.",
+        "If any symbol appears an odd number of times, the string is invalid.",
         f"Any token outside {token_list} is invalid.",
         "There is no ordering rule in g2 beyond the parity constraints.",
     ]
