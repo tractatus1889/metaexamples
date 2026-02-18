@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate samples and check grammar validity")
     parser.add_argument("--model", required=True, help="Path to model/checkpoint")
     parser.add_argument("--grammar", required=True, choices=sorted(GRAMMARS))
-    parser.add_argument("--n-samples", type=int, default=2000)
+    parser.add_argument("--n-samples", type=int, default=5000)
     parser.add_argument("--max-length", type=int, default=100)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-p", type=float, default=0.9)
