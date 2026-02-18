@@ -10,6 +10,7 @@ Primary modes:
 from __future__ import annotations
 
 import argparse
+import inspect
 from pathlib import Path
 
 try:
@@ -278,24 +279,32 @@ def main() -> None:
 
     output_dir = Path(args.output_dir) / args.run_name
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    training_args = TrainingArguments(
-        output_dir=str(output_dir),
-        run_name=args.run_name,
-        per_device_train_batch_size=args.batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        learning_rate=args.learning_rate,
-        max_steps=args.max_steps,
-        warmup_steps=args.warmup_steps,
-        bf16=args.use_bf16,
-        save_steps=args.save_steps,
-        evaluation_strategy="steps" if eval_dataset is not None else "no",
-        eval_steps=args.eval_steps,
-        logging_steps=args.logging_steps,
-        save_total_limit=10,
-        seed=args.seed,
-        report_to="tensorboard",
-        remove_unused_columns=False,
-    )
+    train_args_signature = inspect.signature(TrainingArguments.__init__).parameters
+    training_kwargs = {
+        "output_dir": str(output_dir),
+        "run_name": args.run_name,
+        "per_device_train_batch_size": args.batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "learning_rate": args.learning_rate,
+        "max_steps": args.max_steps,
+        "warmup_steps": args.warmup_steps,
+        "bf16": args.use_bf16,
+        "save_steps": args.save_steps,
+        "logging_steps": args.logging_steps,
+        "save_total_limit": 10,
+        "seed": args.seed,
+        "report_to": "tensorboard",
+        "remove_unused_columns": False,
+    }
+    if eval_dataset is not None:
+        if "evaluation_strategy" in train_args_signature:
+            training_kwargs["evaluation_strategy"] = "steps"
+            training_kwargs["eval_steps"] = args.eval_steps
+        elif "do_eval" in train_args_signature:
+            training_kwargs["do_eval"] = True
+            if "eval_steps" in train_args_signature:
+                training_kwargs["eval_steps"] = args.eval_steps
+    training_args = TrainingArguments(**training_kwargs)
 
     trainer = Trainer(
         model=model,

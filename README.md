@@ -33,7 +33,7 @@ The default scoring prioritizes rare token IDs (as an approximation to low-frequ
 - Install dependencies from the project root:
 
 ```bash
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 ## Lambda (GH200) full run
@@ -62,10 +62,12 @@ PY
 If torch shows `+cpu` / `cuda in torch: None` / `device count: 0`, reinstall CUDA torch:
 
 ```bash
-pip uninstall -y torch torchvision torchaudio
-pip install --upgrade pip setuptools wheel
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt --no-deps
+python3 -m pip uninstall -y torchaudio torchvision
+python3 -m pip uninstall -y torch
+python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+python3 -m pip install -r requirements.txt
+python3 -m pip check
 ```
 
 Then re-run the check above before continuing.
@@ -81,8 +83,51 @@ cd metaexamples
 2) Install dependencies in the base environment
 
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+python3 -m pip install --upgrade pip setuptools wheel --user
+python3 -m pip install -r requirements.txt
+```
+
+If you see runtime import/runtime-ABI errors when running scripts (e.g. `numpy.dtype size changed` or sklearn/sklearn-related import errors), run:
+
+```bash
+python3 -m pip install --upgrade pip setuptools wheel --user
+python3 -m pip install --user --force-reinstall \
+  "numpy==1.26.4" \
+  "scipy>=1.11.4" \
+  "scikit-learn>=1.4.2" \
+  "filelock>=3.12.0" \
+  "transformers>=4.40" \
+  "datasets>=2.18" \
+  "accelerate>=0.30" \
+  "huggingface_hub>=0.23.0" \
+  "fsspec<=2025.10.0,>=2023.1.0"
+```
+
+Then verify with:
+
+```bash
+python3 -m pip check
+```
+
+If training fails with:
+
+```text
+RuntimeError: operator torchvision::nms does not exist
+```
+
+`torch` and `torchvision` are out of sync (same major/minor ABI mismatch). Fix by reinstalling them as a pair:
+
+```bash
+python3 -m pip uninstall -y torchaudio torchvision
+python3 -m pip uninstall -y torch
+python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+python3 -m pip check
+```
+
+or, if you do not need torchvision for this project, remove it from the environment:
+
+```bash
+python3 -m pip uninstall -y torchvision
 ```
 
 3) Verify GPU
