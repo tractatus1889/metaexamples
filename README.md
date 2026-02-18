@@ -1,203 +1,87 @@
 # metaexamples
 
-Fresh OLMO-first synthetic grammar experiment focused on **metaexamples**.
-
-This project intentionally does not depend on any legacy experiment directory.
-
-## Core loop
-
-1. Select 5 tokenizer tokens from OLMO as a synthetic alphabet.
-2. Generate `g1`, `g2`, `g3` examples, metaexamples, and evaluation splits.
-3. Train OLMO-1B on a canonical stream with synthetic mix.
-4. Evaluate perplexity and sampled generation validity.
+Metaexamples study for learning grammar rules from synthetic supervision:
+train OLMO on synthetic examples and metaexamples for small token alphabets (`g1`, `g2`, `g3`) and evaluate validity discrimination.
 
 ## Grammars
 
-- `g1`: non-empty sequence over 5 symbols up to 12 symbols long.
-- `g2`: `g1` plus each symbol appears an even number of times.
-- `g3`: sequence is a palindrome and each symbol appears an even number of times.
+- `g1`: non-empty sequence over 5 symbols with max length 12.
+- `g2`: `g1` plus every symbol appears an even number of times.
+- `g3`: palindrome plus every symbol appears an even number of times.
 
-Each grammar is wrapped with explicit tags in training data:
-- `g1`: `<g1> ... </g1>`
-- `g2`: `<g2> ... </g2>`
-- `g3`: `<g3> ... </g3>`
+All training samples are wrapped with tags:
+`<g1>...</g1>`, `<g2>...</g2>`, `<g3>...</g3>`.
 
-## Token selection
+## Core loop
 
-`scripts/select_tokens.py` scans OLMO's tokenizer vocab and keeps only
-single-token symbols that round-trip cleanly through encode/decode.
-The default scoring prioritizes rare token IDs (as an approximation to low-frequency tokens) and avoids obvious word-like tokens.
+1. Select 5 tokenizer tokens as symbolic alphabet.
+2. Generate data and eval splits.
+3. Train on canonical text + synthetic mix.
+4. Evaluate with perplexity and sampled validity.
 
-## Install
+## Fast, clean setup (recommended)
 
-- Install dependencies from the project root:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-## Lambda (GH200) full run
-
-From a new GH200 SSH session:
-
-### GPU sanity check (do this first)
-
-Run these immediately after SSH and before install:
-
-```bash
-nvidia-smi
-
-python - <<'PY'
-import torch
-print("torch", torch.__version__)
-print("torch cuda", torch.version.cuda)
-print("cuda available", torch.cuda.is_available())
-print("device count", torch.cuda.device_count())
-if torch.cuda.is_available():
-    print("device", torch.cuda.get_device_name(0))
-    print("capability", torch.cuda.get_device_capability(0))
-PY
-```
-
-If torch shows `+cpu` / `cuda in torch: None` / `device count: 0`, reinstall CUDA torch:
-
-```bash
-python3 -m pip uninstall -y torchaudio torchvision
-python3 -m pip uninstall -y torch
-python3 -m pip install --upgrade pip setuptools wheel
-python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-python3 -m pip install -r requirements.txt
-python3 -m pip check
-```
-
-Then re-run the check above before continuing.
-
-
-1) Start workspace and clone repo
+From a fresh clone:
 
 ```bash
 git clone https://github.com/tractatus1889/metaexamples.git
 cd metaexamples
 ```
 
-Quick clean setup from scratch:
+Create a fresh venv and install everything in one go:
 
 ```bash
-cd /path/to/metaexamples
-bash scripts/bootstrap_clean_env.sh
-source .venv_metaexamples/bin/activate
-```
-
-To guarantee a full reset:
-
-```bash
-cd /path/to/metaexamples
 bash scripts/bootstrap_clean_env.sh --fresh .venv_metaexamples
 source .venv_metaexamples/bin/activate
 ```
 
-That script:
-- creates a dedicated venv,
-- installs CUDA PyTorch + project deps,
-- repairs NumPy/ML stack versions,
-- verifies `transformers`, `torch`, and `Trainer` imports,
-- and runs a smoke `select_tokens.py` command.
+What this script does:
+- creates `.venv_metaexamples`
+- installs CUDA PyTorch + project dependencies
+- restores a stable NumPy/ML stack
+- verifies core imports (`transformers`, `torch`, `Trainer`)
+- optionally runs token selection once
 
-2) Install dependencies in the base environment
-
-```bash
-python3 -m pip install --upgrade pip setuptools wheel --user
-python3 -m pip install -r requirements.txt
-```
-
-If you see runtime import/runtime-ABI errors when running scripts (e.g. `numpy.dtype size changed` or sklearn/sklearn-related import errors), run:
+If you prefer to keep your current venv, run without `--fresh`:
 
 ```bash
-python3 -m pip install --upgrade pip setuptools wheel --user
-python3 -m pip install --user --force-reinstall \
-  "numpy==1.26.4" \
-  "scipy>=1.11.4" \
-  "scikit-learn>=1.4.2" \
-  "filelock>=3.12.0" \
-  "transformers>=4.40" \
-  "datasets>=2.18" \
-  "accelerate>=0.30" \
-  "huggingface_hub>=0.23.0" \
-  "fsspec<=2025.10.0,>=2023.1.0"
+bash scripts/bootstrap_clean_env.sh
+source .venv_metaexamples/bin/activate
 ```
 
-Then verify with:
+## Minimal verification
+
+Run this once after setup:
 
 ```bash
-python3 -m pip check
-```
+TRANSFORMERS_NO_TF=1 python - <<'PY'
+import os, sys, numpy, torch, transformers
+from transformers import Trainer, TrainingArguments
 
-This project also sets `TRANSFORMERS_NO_TF=1` at runtime for all scripts that import `transformers`, so `transformers` does not try to import TensorFlow.
-
-If training fails with:
-
-```text
-RuntimeError: operator torchvision::nms does not exist
-```
-
-`torch` and `torchvision` are out of sync (same major/minor ABI mismatch). Fix by reinstalling them as a pair:
-
-```bash
-python3 -m pip uninstall -y torchaudio torchvision
-python3 -m pip uninstall -y torch
-python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-python3 -m pip check
-```
-
-or, if you do not need torchvision for this project, remove it from the environment:
-
-```bash
-python3 -m pip uninstall -y torchvision
-```
-
-If you still see `numpy.core.umath failed to import` during `train.py`/`evaluate_*`:
-
-```bash
-TRANSFORMERS_NO_TF=1 python3 -m pip uninstall -y tensorflow tensorflow-estimator tensorflow-hub tensorboard
-TRANSFORMERS_NO_TF=1 python3 -m pip install --user --force-reinstall \
-  "numpy==1.26.4" \
-  "scipy>=1.11.4" \
-  "scikit-learn>=1.4.2" \
-  "ml-dtypes<0.5" \
-  "transformers>=4.40" \
-  "datasets>=2.18" \
-  "accelerate>=0.30" \
-  "fsspec<=2025.10.0,>=2023.1.0"
-```
-
-If any old command snippet uses `/usr/bin/python3`, replace it with `python3` so you always target the interpreter running the environment.
-
-3) Verify GPU
-
-```bash
-python - <<'PY'
-import torch
-print("cuda:", torch.cuda.is_available())
-print("device:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none")
-print("capability:", torch.cuda.get_device_capability(0) if torch.cuda.is_available() else "none")
+print("python:", sys.executable)
+print("no_tf:", os.getenv("TRANSFORMERS_NO_TF"))
+print("numpy:", numpy.__version__)
+print("torch:", torch.__version__, "cuda:", torch.version.cuda, "available:", torch.cuda.is_available())
+print("transformers:", transformers.__version__)
+print("trainer import:", "ok")
 PY
 ```
 
-4) Select 5 tokens for the synthetic alphabet
+## Required workflow commands
+
+1) Select symbolic alphabet
 
 ```bash
-python scripts/select_tokens.py \
+python3 scripts/select_tokens.py \
   --model-id allenai/OLMo-1B-hf \
   --prefer-non-ascii \
   --ascii-fallback
 ```
 
-This writes `data/tokens/selected_alphabet.json`.
-
-5) Generate train/eval corpora for all grammars
+2) Generate corpora/eval splits
 
 ```bash
-python scripts/generate_data.py \
+python3 scripts/generate_data.py \
   --token-file data/tokens/selected_alphabet.json \
   --grammars g1,g2,g3 \
   --n-train 10000 \
@@ -206,10 +90,10 @@ python scripts/generate_data.py \
   --n-invalid-eval 1000
 ```
 
-6) Smoke train + eval (single grammar condition)
+3) Smoke train (single condition)
 
 ```bash
-python scripts/train.py \
+python3 scripts/train.py \
   --model-id allenai/OLMo-1B-hf \
   --corpus data/corpora/g1_examples.jsonl \
   --run-name olmo-1b_g1_smoke \
@@ -221,17 +105,17 @@ python scripts/train.py \
   --save-steps 50
 ```
 
-7) Validate smoke model
+4) Validate smoke model
 
 ```bash
-python scripts/evaluate_perplexity.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --split test
-python scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --n-samples 500
+python3 scripts/evaluate_perplexity.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --split test
+python3 scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --n-samples 500
 ```
 
-8) Full experiment matrix (all grammars + all conditions)
+5) Full matrix (all grammars + all conditions)
 
 ```bash
-python scripts/run_experiment.py \
+python3 scripts/run_experiment.py \
   --model-id allenai/OLMo-1B-hf \
   --grammars g1,g2,g3 \
   --conditions examples,meta_1pct,meta_5pct,meta_10pct \
@@ -239,64 +123,18 @@ python scripts/run_experiment.py \
   --eval-split test
 ```
 
-`run_experiment.py` will:
-- regenerate corpora if needed,
-- train each `(grammar, condition)` run with `--eval-data` on `data/eval/<grammar>_<split>`,
-- run `scripts/evaluate_perplexity.py`,
-- run `scripts/evaluate_generation.py` with `--n-samples 500`.
+`run_experiment.py` will train each `(grammar, condition)` pair and run perplexity + generation checks after each run.
 
-## Quick start (local)
+## Useful flags
 
-1. Select symbol inventory:
-
-```bash
-python scripts/select_tokens.py --model-id allenai/OLMo-1B-hf
-python scripts/select_tokens.py --model-id allenai/OLMo-1B-hf --prefer-non-ascii
-python scripts/select_tokens.py --model-id allenai/OLMo-1B-hf --ascii-fallback
-```
-
-2. Generate data:
-
-```bash
-python scripts/generate_data.py
-```
-
-3. Train one configuration:
-
-```bash
-python scripts/train.py --model-id allenai/OLMo-1B-hf --corpus data/corpora/g1_examples.jsonl --max-steps 2000
-```
-
-To run in-training perplexity validation, pass an eval split file:
-
-```bash
-python scripts/train.py --model-id allenai/OLMo-1B-hf \
-  --corpus data/corpora/g1_examples.jsonl \
-  --eval-data data/eval/g1_test_valid.txt \
-  --max-steps 2000 \
-  --eval-steps 250
-```
-
-`Trainer` logs `eval_loss` at each eval step, which you can exponentiate to get perplexity for that checkpoint.
-
-4. Evaluate:
-
-```bash
-python scripts/evaluate_perplexity.py --model checkpoints/olmo-1b_g1_examples/final --grammar g1
-python scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_examples/final --grammar g1
-```
-
-## Full run helper
-
-```bash
-python scripts/run_experiment.py --model-id allenai/OLMo-1B-hf
-```
-
-This will generate data, train all selected conditions, and run generation validity by default.
-
-Useful flags:
-
-- `--synthetic-mix-ratio 0.1`: synthetic/canonical proportion in training stream.
-- `--conditions examples,meta_1pct,meta_5pct,meta_10pct`: experiment matrix.
+- `--synthetic-mix-ratio 0.1`: synthetic fraction in training stream.
+- `--conditions examples,meta_1pct,meta_5pct,meta_10pct`: run matrix.
 - `--run-only g1`: limit to one grammar.
-- `--train-only` / `--eval-only`: split phases.
+- `--train-only` / `--eval-only`: split training and evaluation.
+- `--eval-steps`: validation interval in training.
+- `--save-steps`: checkpoint interval in training.
+
+## Troubleshooting (short)
+
+- Use `python3` (not `/usr/bin/python3`) for all commands.
+- If your environment is still broken, rerun bootstrap with `--fresh` and delete/recreate the venv.
