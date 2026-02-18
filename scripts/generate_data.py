@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from metaexamples.grammars import GRAMMARS, wrap
+from metaexamples.grammars import DEFAULT_MIN_LEN, GRAMMARS, wrap
 from metaexamples.utils import interleave_streams, write_jsonl, write_lines
 
 
@@ -87,7 +87,7 @@ def main() -> None:
         spec = GRAMMARS[name]
         print(f"\nGenerating for {name}...")
 
-        min_len = 1
+        min_len = DEFAULT_MIN_LEN
         max_len = 12
 
         train_examples = [wrap(name, s) for s in spec.generate_valid(args.n_train, alphabet, args.seed, min_len, max_len)]

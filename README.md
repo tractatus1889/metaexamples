@@ -13,7 +13,7 @@ This project intentionally does not depend on any legacy experiment directory.
 
 ## Grammars
 
-- `g1`: any non-empty sequence over 5 symbols within bounds.
+- `g1`: non-empty sequence over 5 symbols up to 12 symbols long.
 - `g2`: `g1` plus each symbol appears an even number of times.
 - `g3`: sequence is a palindrome and each symbol appears an even number of times.
 

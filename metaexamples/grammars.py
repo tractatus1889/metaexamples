@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Callable, List, Sequence, Tuple
 
 
-DEFAULT_MIN_LEN = 1
 DEFAULT_MAX_LEN = 12
+DEFAULT_MIN_LEN = 1
 
 
 def _tokens_from_text(text: str) -> List[str]:
@@ -46,8 +46,6 @@ def _random_token_sequence(
 
 
 def _random_len(rng: random.Random, min_len: int, max_len: int) -> int:
-    if max_len <= min_len:
-        return min_len
     return rng.randint(min_len, max_len)
 
 
@@ -101,10 +99,10 @@ def g1_is_valid(
     max_len: int = DEFAULT_MAX_LEN,
 ) -> bool:
     """
-    g1: any non-empty combination of allowed tokens.
+    g1: any combination of allowed tokens up to a max length.
 
     All tokens must come from the grammar's alphabet and the overall length
-    must lie within fixed bounds.
+    must respect the fixed maximum.
     """
     tokens = _tokens_from_text(text)
     if not _is_valid_length(tokens, min_len, max_len):
@@ -247,7 +245,8 @@ def g2_generate_invalid(
                     tokens.pop(rng.randrange(len(tokens)))
             else:
                 # No even-length valid string exists in-range; odd-length is always invalid.
-                tokens = _random_token_sequence(alphabet, min_len if min_len <= max_len else 1, rng)
+                fallback_len = max(1, min_len) if min_len <= max_len else 1
+                tokens = _random_token_sequence(alphabet, fallback_len, rng)
             sentences.append(_join_tokens(tokens))
             continue
 
@@ -282,6 +281,7 @@ def g2_generate_metaexamples(
         "In g2, valid strings use only symbols from the set.",
         f"In g2, every symbol must appear an even number of times.",
         f"In g2, the maximum valid length is {max_len} symbols.",
+        "In g2, the empty string is invalid.",
         "In g2, if any symbol appears an odd number of times, the string is invalid.",
         f"In g2, any token outside {token_list} is invalid.",
         "In g2, every valid expression is wrapped as <g2> ... </g2>.",
@@ -402,10 +402,11 @@ def g3_generate_metaexamples(
         "In g3, a valid sequence must be a palindrome.",
         "In g3, each symbol must appear an even number of times.",
         "In g3, if any symbol appears an odd number of times, the string is invalid.",
+        "In g3, the empty string is invalid.",
         "In g3, a valid sequence reads the same forwards and backwards.",
         f"In g3, symbols are restricted to: {token_list}.",
         "In g3, every valid expression is wrapped as <g3> ... </g3>.",
-        f"In g3, length is between {DEFAULT_MIN_LEN} and {max_len}.",
+        f"In g3, the maximum valid length is {max_len} symbols.",
     ]
     return [g3_wrap(rng.choice(templates)) for _ in range(6)]
 

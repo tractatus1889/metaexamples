@@ -19,7 +19,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from metaexamples.grammars import GRAMMARS, unwrap
+from metaexamples.grammars import (
+    GRAMMARS,
+    DEFAULT_MIN_LEN,
+    DEFAULT_MAX_LEN,
+    unwrap,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -104,6 +109,7 @@ def main() -> None:
     alphabet = data.get("alphabet")
     if not isinstance(alphabet, list) or len(alphabet) < 5:
         raise ValueError("Invalid token file: expected alphabet list with at least 5 symbols")
+    alphabet = list(alphabet[:5])
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     if tokenizer.pad_token is None:
@@ -136,7 +142,12 @@ def main() -> None:
     for sample in samples:
         prompt = sample["prompt"]
         extracted = _extract_inner(args.grammar, sample["generated"])
-        is_valid = spec.is_valid(extracted, alphabet=alphabet, min_len=1, max_len=12)
+        is_valid = spec.is_valid(
+            extracted,
+            alphabet=alphabet,
+            min_len=DEFAULT_MIN_LEN,
+            max_len=DEFAULT_MAX_LEN,
+        )
         if is_valid:
             valid_count += 1
             per_prompt[prompt]["valid"] += 1
@@ -153,7 +164,7 @@ def main() -> None:
     }
 
     print(f"\n{args.grammar} generation validity: {results['validity_rate'] * 100:.2f}% "
-          f"({results['valid']}/{results['total']})")
+          f"({results['valid']}/{results['n_samples']})")
 
     output = args.output
     if output is None:
