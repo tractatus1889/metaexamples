@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import shutil
 import sys
+from typing import List
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,12 +54,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-only", default=None, help="Only run one grammar e.g. g1")
     parser.add_argument("--train-only", action="store_true")
     parser.add_argument("--eval-only", action="store_true")
+    parser.add_argument(
+        "--python-exec",
+        default=shutil.which("python3") or sys.executable,
+        help="Python executable for subprocess invocations",
+    )
     return parser.parse_args()
 
 
-def run(cmd: list[str]) -> None:
-    print(f"\n$ {' '.join(cmd)}")
-    subprocess.run(cmd, check=True)
+def run(cmd: list[str], python_exec: str) -> None:
+    full_cmd = [python_exec] + cmd
+    print(f"\n$ {' '.join(full_cmd)}")
+    subprocess.run(full_cmd, check=True)
 
 
 def corpus_for_condition(grammar: str, condition: str) -> str:
@@ -74,7 +82,6 @@ def corpus_for_condition(grammar: str, condition: str) -> str:
 
 def run_generation(args, grammars):
     run([
-        sys.executable,
         "scripts/generate_data.py",
         "--token-file",
         args.token_file,
@@ -82,7 +89,7 @@ def run_generation(args, grammars):
         ",".join(grammars),
         "--n-train",
         str(args.n_train),
-    ])
+    ], args.python_exec)
 
 
 def run_train_and_eval(args, grammar: str, condition: str):
@@ -103,7 +110,6 @@ def run_train_and_eval(args, grammar: str, condition: str):
             f"data/eval/{grammar}_{'valid' if split == 'val' else 'test_valid'}.txt"
         )
         run([
-            sys.executable,
             "scripts/train.py",
             "--model-id",
             args.model_id,
@@ -123,7 +129,7 @@ def run_train_and_eval(args, grammar: str, condition: str):
             "1e-5",
             "--eval-data",
             eval_file,
-        ])
+        ], args.python_exec)
 
     if args.train_only:
         return
@@ -133,7 +139,6 @@ def run_train_and_eval(args, grammar: str, condition: str):
 
     if not args.eval_only or output_dir.exists():
         run([
-            sys.executable,
             "scripts/evaluate_perplexity.py",
             "--model",
             str(output_dir / "final"),
@@ -141,9 +146,8 @@ def run_train_and_eval(args, grammar: str, condition: str):
             grammar,
             "--split",
             args.eval_split,
-        ])
+        ], args.python_exec)
         run([
-            sys.executable,
             "scripts/evaluate_generation.py",
             "--model",
             str(output_dir / "final"),
@@ -155,7 +159,7 @@ def run_train_and_eval(args, grammar: str, condition: str):
             "500",
             "--batch-size",
             str(args.batch_generation),
-        ])
+        ], args.python_exec)
 
 
 def main() -> None:
