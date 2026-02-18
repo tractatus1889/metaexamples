@@ -31,6 +31,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grammar", required=True, choices=sorted(GRAMMARS))
     parser.add_argument("--split", default="test", choices=["val", "test"])
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument(
+        "--max-length",
+        type=int,
+        default=512,
+        help="Max sequence length for tokenization before scoring.",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output", default=None)
     return parser.parse_args()
@@ -148,7 +154,7 @@ def _best_threshold_metrics(scores, labels):
     return best
 
 
-def compute_losses(texts, model, tokenizer, batch_size, device):
+def compute_losses(texts, model, tokenizer, batch_size, max_length: int, device: str):
     model.eval()
     model.to(device)
     total_loss = 0.0
@@ -164,7 +170,7 @@ def compute_losses(texts, model, tokenizer, batch_size, device):
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=512,
+                max_length=max_length,
             ).to(device)
             outputs = model(**batch_tokens, labels=batch_tokens["input_ids"])
             logits = outputs.logits
@@ -214,8 +220,22 @@ def main() -> None:
     valid_texts = _load_lines(valid_path)
     invalid_texts = _load_lines(invalid_path)
 
-    valid = compute_losses(valid_texts, model, tokenizer, args.batch_size, args.device)
-    invalid = compute_losses(invalid_texts, model, tokenizer, args.batch_size, args.device)
+    valid = compute_losses(
+        valid_texts,
+        model,
+        tokenizer,
+        args.batch_size,
+        args.max_length,
+        args.device,
+    )
+    invalid = compute_losses(
+        invalid_texts,
+        model,
+        tokenizer,
+        args.batch_size,
+        args.max_length,
+        args.device,
+    )
 
     valid_nll = valid["per_sample_nll"]
     invalid_nll = invalid["per_sample_nll"]

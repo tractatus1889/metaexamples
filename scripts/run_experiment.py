@@ -38,12 +38,48 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--n-train", type=int, default=10000)
     parser.add_argument("--max-steps", type=int, default=2000)
+    parser.add_argument("--learning-rate", type=float, default=1e-5)
+    parser.add_argument("--gradient-accumulation-steps", type=int, default=8)
+    parser.add_argument("--warmup-steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--save-steps", type=int, default=500)
+    parser.add_argument("--eval-steps", type=int, default=1000)
     parser.add_argument(
         "--synthetic-mix-ratio",
         type=float,
         default=0.10,
         help="Fraction of synthetic corpus mixed with canonical stream",
+    )
+    parser.add_argument(
+        "--max-seq-length",
+        type=int,
+        default=512,
+        help="Common tokenization truncation length for training/eval.",
+    )
+    parser.add_argument("--train-logging-steps", type=int, default=100)
+    parser.add_argument(
+        "--logging-steps",
+        type=int,
+        default=None,
+        help="Backward-compatible alias for --train-logging-steps.",
+    )
+    parser.add_argument(
+        "--max-generation-length",
+        type=int,
+        default=100,
+        help="Max generation length for generation validity eval.",
+    )
+    parser.add_argument(
+        "--generation-n-samples",
+        type=int,
+        default=5000,
+        help="Number of generation samples for each condition.",
+    )
+    parser.add_argument(
+        "--perplexity-max-length",
+        type=int,
+        default=512,
+        help="Max sequence length for perplexity tokenization.",
     )
     parser.add_argument(
         "--eval-split",
@@ -57,6 +93,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-only", default=None, help="Only run one grammar e.g. g1")
     parser.add_argument("--train-only", action="store_true")
     parser.add_argument("--eval-only", action="store_true")
+    parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        default=True,
+        help="Pass through to train/eval loading (default True).",
+    )
+    parser.add_argument(
+        "--no-trust-remote-code",
+        dest="trust_remote_code",
+        action="store_false",
+        help="Disable trust_remote_code in HF model/tokenizer loading.",
+    )
     return parser.parse_args()
 
 
@@ -92,6 +140,16 @@ def run(cmd: list[str], python_exec: str) -> None:
     subprocess.run(full_cmd, check=True, env=PYTHON_ENV)
 
 
+def model_slug(model_id: str) -> str:
+    return model_id.replace("/", "_").replace(":", "_")
+
+
+def resolve_logging_steps(args: argparse.Namespace) -> int:
+    if args.logging_steps is not None:
+        return args.logging_steps
+    return args.train_logging_steps
+
+
 def corpus_for_condition(grammar: str, condition: str) -> str:
     if condition == "examples":
         return f"data/corpora/{grammar}_examples.jsonl"
@@ -125,14 +183,18 @@ def run_train_and_eval(args, grammar: str, condition: str, python_exec: str):
     mix_ratio = args.synthetic_mix_ratio
     if not 0 <= mix_ratio <= 1:
         raise ValueError("synthetic-mix-ratio must be within [0, 1]")
-    run_name = f"olmo-1b_{grammar}_{condition}"
+    run_name = f"{model_slug(args.model_id)}_{grammar}_{condition}"
     output_dir = Path(args.output_dir) / run_name
+    run_dir = output_dir / "final"
+    results_dir = Path(args.results_dir) / run_name
+    results_dir.mkdir(parents=True, exist_ok=True)
 
     if not args.eval_only:
         split = "test" if args.eval_split == "test" else "val"
         eval_file = (
             f"data/eval/{grammar}_{'valid' if split == 'val' else 'test_valid'}.txt"
         )
+        logging_steps = resolve_logging_steps(args)
         run([
             "scripts/train.py",
             "--model-id",
@@ -149,10 +211,23 @@ def run_train_and_eval(args, grammar: str, condition: str, python_exec: str):
             str(args.max_steps),
             "--batch-size",
             str(args.batch_size),
+            "--gradient-accumulation-steps",
+            str(args.gradient_accumulation_steps),
             "--learning-rate",
-            "1e-5",
+            str(args.learning_rate),
+            "--warmup-steps",
+            str(args.warmup_steps),
+            "--save-steps",
+            str(args.save_steps),
+            "--eval-steps",
+            str(args.eval_steps),
+            "--max-seq-length",
+            str(args.max_seq_length),
+            "--train-logging-steps",
+            str(logging_steps),
             "--eval-data",
             eval_file,
+            "--trust-remote-code" if args.trust_remote_code else "--no-trust-remote-code",
         ], python_exec)
 
     if args.train_only:
@@ -160,34 +235,48 @@ def run_train_and_eval(args, grammar: str, condition: str, python_exec: str):
 
     if args.eval_only and not output_dir.exists():
         raise FileNotFoundError(f"Missing run directory for eval: {output_dir}")
+    if args.eval_only and not run_dir.exists():
+        raise FileNotFoundError(f"Missing trained final checkpoint for eval: {run_dir}")
 
     if not args.eval_only or output_dir.exists():
         run([
             "scripts/evaluate_perplexity.py",
             "--model",
-            str(output_dir / "final"),
+            str(run_dir),
             "--grammar",
             grammar,
             "--split",
             args.eval_split,
+            "--max-length",
+            str(args.perplexity_max_length),
+            "--batch-size",
+            str(args.batch_size),
+            "--output",
+            str(results_dir / f"{run_name}_{grammar}_{args.eval_split}_perplexity.json"),
         ], python_exec)
         run([
             "scripts/evaluate_generation.py",
             "--model",
-            str(output_dir / "final"),
+            str(run_dir),
             "--grammar",
             grammar,
             "--token-file",
             args.token_file,
             "--n-samples",
-            "500",
+            str(args.generation_n_samples),
+            "--max-length",
+            str(args.max_generation_length),
             "--batch-size",
             str(args.batch_generation),
+            "--output",
+            str(results_dir / f"{run_name}_{grammar}_generation.json"),
         ], python_exec)
 
 
 def main() -> None:
     args = parse_args()
+    if args.train_only and args.eval_only:
+        raise ValueError("--train-only and --eval-only are mutually exclusive")
     python_exec = sys.executable
     verify_subprocess_env(python_exec)
 
@@ -201,6 +290,8 @@ def main() -> None:
             raise ValueError(f"Unknown grammar: {grammar}")
 
     if args.run_only:
+        if args.run_only not in GRAMMARS:
+            raise ValueError(f"Unknown run-only grammar: {args.run_only}")
         grammar_names = [args.run_only]
 
     conditions = [c.strip() for c in args.conditions.split(",") if c.strip()]

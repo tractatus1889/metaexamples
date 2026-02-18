@@ -121,7 +121,7 @@ Each row includes `step`, `split` (`train`/`eval`), and the metrics present in t
 
 ```bash
 python3 scripts/evaluate_perplexity.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --split test
-python3 scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --n-samples 500
+python3 scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --n-samples 5000
 ```
 
 5) Full matrix (all grammars + all conditions)
@@ -148,7 +148,37 @@ python3 scripts/run_experiment.py \
 - `--save-steps`: checkpoint interval in training.
 - `--train-logging-steps`: train metrics logging interval.
 - `--logging-steps`: backward-compatible alias for `--train-logging-steps`.
+- `--learning-rate`: training learning rate for train.py.
+- `--gradient-accumulation-steps`: gradient accumulation for train.py.
+- `--warmup-steps`: warmup in train.py.
+- `--max-seq-length`: sequence length cap used for tokenization.
+- `--results-dir`: directory for generated eval artifacts.
+- `--generation-n-samples`: number of validity test generations per run.
+- `--max-generation-length`: generation max length in eval generation.
+- `--perplexity-max-length`: tokenization max length for perplexity eval.
 - `--metrics-log`: optional path for JSONL train/eval metric log (default `<output-dir>/<run-name>/metrics.jsonl`).
+- `--trust-remote-code` / `--no-trust-remote-code`: control HF model/tokenizer trust_remote_code setting.
+
+Example full run with the explicit experiment-level tuning flags:
+
+```bash
+python3 scripts/run_experiment.py \
+  --model-id allenai/OLMo-1B-hf \
+  --grammars g1,g2,g3 \
+  --conditions examples,meta_1pct,meta_5pct,meta_10pct \
+  --max-steps 2000 \
+  --batch-size 4 \
+  --learning-rate 1e-5 \
+  --gradient-accumulation-steps 8 \
+  --warmup-steps 1000 \
+  --eval-steps 200 \
+  --save-steps 500 \
+  --train-logging-steps 25 \
+  --generation-n-samples 5000 \
+  --max-generation-length 100 \
+  --perplexity-max-length 512 \
+  --results-dir results
+```
 
 What “Writing model shards” means:
 - `Writing model shards` is a normal checkpoint save log from Hugging Face.

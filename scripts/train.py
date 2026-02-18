@@ -109,6 +109,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-bf16", dest="use_bf16", action="store_false")
     parser.add_argument("--trust-remote-code", action="store_true", default=True)
     parser.add_argument(
+        "--no-trust-remote-code",
+        dest="trust_remote_code",
+        action="store_false",
+        help="Disable trust_remote_code in HF model/tokenizer loading.",
+    )
+    parser.add_argument(
         "--metrics-log",
         default=None,
         help="Path to write train/eval metrics JSONL (default: <output-dir>/<run-name>/metrics.jsonl)",
