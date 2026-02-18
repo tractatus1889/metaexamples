@@ -4,9 +4,23 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+if [[ "${1:-}" == "--fresh" ]]; then
+  FRESH=1
+  shift
+else
+  FRESH=0
+fi
+
 VENV_DIR="${1:-.venv_metaexamples}"
 CUDA_WHEEL_URL="${CUDA_WHEEL_URL:-https://download.pytorch.org/whl/cu121}"
 MODEL_ID="${MODEL_ID:-allenai/OLMo-1B-hf}"
+
+if [[ "$FRESH" == "1" ]]; then
+  if [ -d "$VENV_DIR" ]; then
+    echo "Removing existing venv: $VENV_DIR"
+    rm -rf "$VENV_DIR"
+  fi
+fi
 
 if [ -d "$VENV_DIR" ]; then
   echo "Using existing venv: $VENV_DIR"

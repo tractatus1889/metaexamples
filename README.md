@@ -88,6 +88,14 @@ bash scripts/bootstrap_clean_env.sh
 source .venv_metaexamples/bin/activate
 ```
 
+To guarantee a full reset:
+
+```bash
+cd /path/to/metaexamples
+bash scripts/bootstrap_clean_env.sh --fresh .venv_metaexamples
+source .venv_metaexamples/bin/activate
+```
+
 That script:
 - creates a dedicated venv,
 - installs CUDA PyTorch + project deps,
