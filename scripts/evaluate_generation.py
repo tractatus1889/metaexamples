@@ -36,7 +36,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True, help="Path to model/checkpoint")
     parser.add_argument("--grammar", required=True, choices=sorted(GRAMMARS))
     parser.add_argument("--n-samples", type=int, default=1000)
-    parser.add_argument("--max-length", type=int, default=20)
+    parser.add_argument(
+        "--max-length",
+        type=int,
+        default=20,
+        help="Number of tokens to generate (new tokens), not the total sequence length.",
+    )
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -91,13 +96,17 @@ def generate(
 
     samples = []
     for prompt, remaining in tqdm(prompts_to_counts.items(), desc="prompts"):
+        prompt_tokens = tokenizer(prompt, return_tensors="pt", padding=False)["input_ids"]
+        if prompt_tokens.numel() == 0 or prompt_tokens.shape[-1] == 0:
+            raise ValueError(f"Prompt encoded to zero tokens: {prompt!r}.")
+        max_new_tokens = max(1, int(max_length))
         while remaining > 0:
             n = min(batch_size, remaining)
             inputs = tokenizer([prompt] * n, return_tensors="pt", padding=True).to(device)
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    max_length=max_length,
+                    max_new_tokens=max_new_tokens,
                     do_sample=True,
                     temperature=temperature,
                     top_p=top_p,

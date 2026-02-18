@@ -183,7 +183,7 @@ python3 scripts/run_experiment.py \
 - `--max-seq-length`: sequence length cap used for tokenization.
 - `--results-dir`: directory for generated eval artifacts.
 - `--generation-n-samples`: number of validity test generations per run.
-- `--max-generation-length`: generation max length in eval generation.
+- `--max-generation-length`: number of generated tokens per prompt in eval generation.
 - `--perplexity-max-length`: tokenization max length for perplexity eval.
 - `--metrics-log`: optional path for JSONL train/eval metric log (default `<output-dir>/<run-name>/metrics.jsonl`).
 - `--save-samples` (evaluate_generation.py): include raw generated rows in output JSON (may be large, off by default).
