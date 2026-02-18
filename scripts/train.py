@@ -137,6 +137,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--eval-data", default=None, help="Optional eval text file (one sample per line)")
     parser.add_argument("--max-seq-length", type=int, default=512)
+    parser.add_argument(
+        "--eval-at-step-0",
+        action="store_true",
+        help="Run an evaluation pass before the first training step.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--use-bf16", action="store_true", default=True)
     parser.add_argument("--no-bf16", dest="use_bf16", action="store_false")
@@ -861,6 +866,17 @@ def main() -> None:
 
     print(f"Starting training, output -> {output_dir}")
     print(f"Metrics log: {metrics_log_path}")
+
+    if eval_dataset is not None and args.eval_at_step_0:
+        print("Running step 0 eval...")
+        initial_eval = trainer.evaluate()
+        pretty_initial = {
+            k: f"{v:.4f}" if isinstance(v, float) else str(v) for k, v in initial_eval.items()
+        }
+        print(f"Step 0 eval metrics: {pretty_initial}")
+        if hasattr(metrics_logger, "_write"):
+            metrics_logger._write(0, "eval", initial_eval)
+
     trainer.train()
 
     if eval_dataset is not None:
