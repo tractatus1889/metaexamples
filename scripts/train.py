@@ -87,7 +87,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-steps", type=int, default=1000)
     parser.add_argument("--save-steps", type=int, default=500)
     parser.add_argument("--eval-steps", type=int, default=1000)
-    parser.add_argument("--logging-steps", type=int, default=100)
+    parser.add_argument(
+        "--train-logging-steps",
+        dest="logging_steps",
+        type=int,
+        default=100,
+        help="Train metrics logging interval",
+    )
+    parser.add_argument(
+        "--logging-steps",
+        dest="logging_steps",
+        type=int,
+        default=argparse.SUPPRESS,
+        help="Backward-compatible alias for --train-logging-steps",
+    )
     parser.add_argument("--eval-data", default=None, help="Optional eval text file (one sample per line)")
     parser.add_argument("--max-seq-length", type=int, default=512)
     parser.add_argument("--seed", type=int, default=42)

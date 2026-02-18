@@ -103,14 +103,14 @@ python3 scripts/train.py \
   --max-steps 200 \
   --eval-data data/eval/g1_test_valid.txt \
   --eval-steps 50 \
-  --logging-steps 25 \
+  --train-logging-steps 25 \
   --save-steps 50
 ```
 
 If `--eval-data` is set and `--eval-steps` is provided, `scripts/train.py` now prints:
 - `Step <n> eval metrics: {...}`
 every `eval_steps`, including `eval_loss`.
-Set `--logging-steps` smaller if you want more frequent train metrics.
+Set `--train-logging-steps` smaller if you want more frequent train metrics (or use `--logging-steps` as a backward-compatible alias).
 After training, `scripts/train.py` also runs one final `evaluate()` and prints `Final eval metrics: ...`.
 
 4) Validate smoke model
@@ -142,7 +142,8 @@ python3 scripts/run_experiment.py \
 - `--train-only` / `--eval-only`: split training and evaluation.
 - `--eval-steps`: validation interval in training.
 - `--save-steps`: checkpoint interval in training.
-- `--logging-steps`: train metrics logging interval.
+- `--train-logging-steps`: train metrics logging interval.
+- `--logging-steps`: backward-compatible alias for `--train-logging-steps`.
 
 What “Writing model shards” means:
 - `Writing model shards` is a normal checkpoint save log from Hugging Face.
