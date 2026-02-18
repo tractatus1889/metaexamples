@@ -253,11 +253,26 @@ def create_canonical_dataset(
     if dataset_path.exists():
         print(f"Using canonical local dataset file: {dataset_path}")
         if dataset_path.suffix.lower() in {".txt", ".text"}:
-            dataset = load_dataset("text", data_files=str(dataset_path), split="train")
+            dataset = load_dataset(
+                "text",
+                data_files=str(dataset_path),
+                split="train",
+                streaming=streaming,
+            )
         elif dataset_path.suffix.lower() in {".jsonl", ".json"}:
-            dataset = load_dataset("json", data_files=str(dataset_path), split="train")
+            dataset = load_dataset(
+                "json",
+                data_files=str(dataset_path),
+                split="train",
+                streaming=streaming,
+            )
         else:
-            dataset = load_dataset("text", data_files=str(dataset_path), split="train")
+            dataset = load_dataset(
+                "text",
+                data_files=str(dataset_path),
+                split="train",
+                streaming=streaming,
+            )
         if text_key not in dataset.column_names:
             text_key = dataset.column_names[0] if dataset.column_names else "text"
         def tokenize(batch):
