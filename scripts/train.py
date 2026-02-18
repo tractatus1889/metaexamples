@@ -375,8 +375,6 @@ def main() -> None:
         "report_to": "tensorboard",
         "remove_unused_columns": False,
     }
-    if eval_callbacks:
-        training_kwargs["callbacks"] = eval_callbacks
     training_args = TrainingArguments(**training_kwargs)
 
     trainer = Trainer(
@@ -385,6 +383,7 @@ def main() -> None:
         train_dataset=train_dataset,
         data_collator=data_collator,
         eval_dataset=eval_dataset,
+        callbacks=eval_callbacks,
     )
     for cb in eval_callbacks:
         cb._trainer = trainer
