@@ -5,6 +5,9 @@ Perplexity and discrimination evaluation for the g1/g2/g3 corpora.
 
 from __future__ import annotations
 
+import os
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+
 import argparse
 import json
 from pathlib import Path

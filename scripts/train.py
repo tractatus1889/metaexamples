@@ -9,6 +9,10 @@ Primary modes:
 
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+
 import argparse
 import inspect
 from pathlib import Path

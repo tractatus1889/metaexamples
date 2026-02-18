@@ -6,6 +6,7 @@ Orchestrate data generation, training, and evaluation for all selected grammars.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from metaexamples import GRAMMARS
+
+PYTHON_ENV = os.environ.copy()
+PYTHON_ENV.setdefault("TRANSFORMERS_NO_TF", "1")
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,7 +66,13 @@ def verify_subprocess_env(python_exec: str) -> None:
         "from transformers import Trainer, TrainingArguments; print('transformers import ok')",
     ]
     try:
-        subprocess.run(check, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(
+            check,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=PYTHON_ENV,
+        )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
             f"Subprocess python ({python_exec}) cannot import Trainer from transformers. "
@@ -78,7 +88,7 @@ def verify_subprocess_env(python_exec: str) -> None:
 def run(cmd: list[str], python_exec: str) -> None:
     full_cmd = [python_exec] + cmd
     print(f"\n$ {' '.join(full_cmd)}")
-    subprocess.run(full_cmd, check=True)
+    subprocess.run(full_cmd, check=True, env=PYTHON_ENV)
 
 
 def corpus_for_condition(grammar: str, condition: str) -> str:

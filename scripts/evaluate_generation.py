@@ -5,6 +5,9 @@ Generation validity evaluation for g1/g2/g3.
 
 from __future__ import annotations
 
+import os
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+
 import argparse
 import json
 from pathlib import Path

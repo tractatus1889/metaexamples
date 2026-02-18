@@ -8,6 +8,9 @@ Each selected token must round-trip through the tokenizer as a single token.
 
 from __future__ import annotations
 
+import os
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+
 import argparse
 import json
 from datetime import datetime

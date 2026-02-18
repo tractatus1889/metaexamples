@@ -109,6 +109,8 @@ Then verify with:
 python3 -m pip check
 ```
 
+This project also sets `TRANSFORMERS_NO_TF=1` at runtime for all scripts that import `transformers`, so `transformers` does not try to import TensorFlow.
+
 If training fails with:
 
 ```text
@@ -129,6 +131,8 @@ or, if you do not need torchvision for this project, remove it from the environm
 ```bash
 python3 -m pip uninstall -y torchvision
 ```
+
+If any old command snippet uses `/usr/bin/python3`, replace it with `python3` so you always target the interpreter running the environment.
 
 3) Verify GPU
 
