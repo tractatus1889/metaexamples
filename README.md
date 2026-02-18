@@ -36,26 +36,49 @@ The default scoring prioritizes rare token IDs (as an approximation to low-frequ
 pip install -r requirements.txt
 ```
 
-## Quick start on Lambda (GH200)
+## Lambda (GH200) full run
 
-These are recommended commands for the GH200 instance:
+From a new GH200 SSH session:
+
+1) Start workspace and clone repo
 
 ```bash
 git clone https://github.com/tractatus1889/metaexamples.git
 cd metaexamples
+```
+
+2) Create and activate a venv, install deps
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
+```
 
+3) Verify GPU
+
+```bash
 python - <<'PY'
 import torch
 print("cuda:", torch.cuda.is_available())
 print("device:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none")
-print("dtype:", torch.cuda.get_device_capability(0) if torch.cuda.is_available() else "none")
+print("capability:", torch.cuda.get_device_capability(0) if torch.cuda.is_available() else "none")
 PY
 ```
 
-Generate full-size data (recommended before real runs):
+4) Select 5 tokens for the synthetic alphabet
+
+```bash
+python scripts/select_tokens.py \
+  --model-id allenai/OLMo-1B-hf \
+  --prefer-non-ascii \
+  --ascii-fallback
+```
+
+This writes `data/tokens/selected_alphabet.json`.
+
+5) Generate train/eval corpora for all grammars
 
 ```bash
 python scripts/generate_data.py \
@@ -67,18 +90,29 @@ python scripts/generate_data.py \
   --n-invalid-eval 1000
 ```
 
-Smoke test one condition:
+6) Smoke train + eval (single grammar condition)
 
 ```bash
-python scripts/run_experiment.py \
+python scripts/train.py \
   --model-id allenai/OLMo-1B-hf \
-  --run-only g1 \
-  --conditions examples \
+  --corpus data/corpora/g1_examples.jsonl \
+  --run-name olmo-1b_g1_smoke \
+  --output-dir checkpoints \
+  --mix-ratio 0.1 \
   --max-steps 200 \
-  --eval-split test
+  --eval-data data/eval/g1_test_valid.txt \
+  --eval-steps 50 \
+  --save-steps 50
 ```
 
-Run full matrix:
+7) Validate smoke model
+
+```bash
+python scripts/evaluate_perplexity.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --split test
+python scripts/evaluate_generation.py --model checkpoints/olmo-1b_g1_smoke/final --grammar g1 --n-samples 500
+```
+
+8) Full experiment matrix (all grammars + all conditions)
 
 ```bash
 python scripts/run_experiment.py \
@@ -89,10 +123,11 @@ python scripts/run_experiment.py \
   --eval-split test
 ```
 
-`run_experiment.py` now performs both:
-- in-training evaluation (`--eval-data` with `--eval-split`), logging `eval_loss`.
-- final `evaluate_perplexity.py` (PPL + discrimination metrics).
-- final `evaluate_generation.py` (generation validity rate).
+`run_experiment.py` will:
+- regenerate corpora if needed,
+- train each `(grammar, condition)` run with `--eval-data` on `data/eval/<grammar>_<split>`,
+- run `scripts/evaluate_perplexity.py`,
+- run `scripts/evaluate_generation.py` with `--n-samples 500`.
 
 ## Quick start (local)
 
