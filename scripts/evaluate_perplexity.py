@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
 
 import argparse
 import json

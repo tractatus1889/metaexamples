@@ -31,9 +31,18 @@ fi
 
 source "$VENV_DIR/bin/activate"
 export TRANSFORMERS_NO_TF=1
+export TRANSFORMERS_NO_TORCHVISION=1
 
 echo "Upgrading pip/setuptools/wheel"
 python -m pip install --upgrade pip setuptools wheel
+
+echo "Removing stale optional vision/audio packages"
+if python -m pip show torchvision >/dev/null 2>&1; then
+  python -m pip uninstall -y torchvision
+fi
+if python -m pip show torchaudio >/dev/null 2>&1; then
+  python -m pip uninstall -y torchaudio
+fi
 
 echo "Installing torch (CUDA wheels)"
 python -m pip install torch --index-url "$CUDA_WHEEL_URL"

@@ -19,6 +19,7 @@ from metaexamples import GRAMMARS
 
 PYTHON_ENV = os.environ.copy()
 PYTHON_ENV.setdefault("TRANSFORMERS_NO_TF", "1")
+PYTHON_ENV.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
 
 
 def parse_args() -> argparse.Namespace:

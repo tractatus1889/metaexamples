@@ -54,12 +54,13 @@ source .venv_metaexamples/bin/activate
 Run this once after setup:
 
 ```bash
-TRANSFORMERS_NO_TF=1 python - <<'PY'
+TRANSFORMERS_NO_TF=1 TRANSFORMERS_NO_TORCHVISION=1 python - <<'PY'
 import os, sys, numpy, torch, transformers
 from transformers import Trainer, TrainingArguments
 
 print("python:", sys.executable)
 print("no_tf:", os.getenv("TRANSFORMERS_NO_TF"))
+print("no_torchvision:", os.getenv("TRANSFORMERS_NO_TORCHVISION"))
 print("numpy:", numpy.__version__)
 print("torch:", torch.__version__, "cuda:", torch.version.cuda, "available:", torch.cuda.is_available())
 print("transformers:", transformers.__version__)
@@ -138,4 +139,6 @@ python3 scripts/run_experiment.py \
 
 - Use `python3` (not `/usr/bin/python3`) for all commands.
 - `torchvision` is not required for this project. If you see torch/vision version conflicts, uninstall vision with `pip uninstall -y torchvision`.
+- If you still hit torchvision-related import failures in this repo, set:
+  `TRANSFORMERS_NO_TORCHVISION=1` and retry imports.
 - If your environment is still broken, rerun bootstrap with `--fresh` and delete/recreate the venv.
