@@ -75,7 +75,10 @@ def pick_tokens(
     prefer_non_ascii: bool = False,
     prefer_rare: bool = True,
 ) -> List[str]:
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_id,
+        trust_remote_code=True,
+    )
     special_ids = {tokenizer.eos_token_id}
     if tokenizer.eos_token_id is not None:
         special_ids.add(tokenizer.eos_token_id)
