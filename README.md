@@ -88,8 +88,13 @@ python3 scripts/generate_data.py \
   --n-train 10000 \
   --n-valid 1000 \
   --n-test 1000 \
-  --n-invalid-eval 1000
+  --n-invalid-eval 1000 \
+  --write-wrapped-eval
 ```
+
+`--write-wrapped-eval` adds wrapped versions for evaluation input files (for example `g1_test_valid_wrapped.txt`) so evaluation aligns with training wrappers.
+
+`scripts/run_experiment.py` calls `generate_data.py` with `--write-wrapped-eval` and automatically uses wrapped eval files when available.
 
 3) Smoke train (single condition)
 

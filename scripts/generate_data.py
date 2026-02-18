@@ -53,6 +53,11 @@ def parse_args() -> argparse.Namespace:
         default="0.01,0.05,0.10",
         help="Ratios for metaexamples corpora (comma-separated)",
     )
+    parser.add_argument(
+        "--write-wrapped-eval",
+        action="store_true",
+        help="Also write wrapped versions of eval files with _wrapped suffix.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -104,6 +109,23 @@ def main() -> None:
         write_lines(eval_root / f"{name}_invalid.txt", val_invalid)
         write_lines(eval_root / f"{name}_test_valid.txt", test_valid)
         write_lines(eval_root / f"{name}_test_invalid.txt", test_invalid)
+        if args.write_wrapped_eval:
+            write_lines(
+                eval_root / f"{name}_valid_wrapped.txt",
+                [wrap(name, s) for s in val_valid],
+            )
+            write_lines(
+                eval_root / f"{name}_invalid_wrapped.txt",
+                [wrap(name, s) for s in val_invalid],
+            )
+            write_lines(
+                eval_root / f"{name}_test_valid_wrapped.txt",
+                [wrap(name, s) for s in test_valid],
+            )
+            write_lines(
+                eval_root / f"{name}_test_invalid_wrapped.txt",
+                [wrap(name, s) for s in test_invalid],
+            )
         print(f"  wrote validation/eval files for {name}")
 
         meta_templates = spec.generate_metaexamples(alphabet, args.seed + 5, max_len)
