@@ -158,6 +158,17 @@ def main() -> None:
             prefer_non_ascii=args.prefer_non_ascii,
             prefer_rare=not args.disable_rare_bias,
         )
+    except OSError:
+        local_match = Path(args.model_id)
+        if args.model_id and "/" not in args.model_id and local_match.exists():
+            raise RuntimeError(
+                f"Found local path {local_match.resolve()} matching model_id. "
+                "Remove/rename the local directory or pass the HF repo id."
+            )
+        raise RuntimeError(
+            "Unable to load tokenizer configuration from Hugging Face. "
+            "Ensure the model id is correct, you have network access, and authenticate if required."
+        )
     except RuntimeError:
         if not args.ascii_fallback:
             raise
