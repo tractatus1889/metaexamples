@@ -132,6 +132,21 @@ or, if you do not need torchvision for this project, remove it from the environm
 python3 -m pip uninstall -y torchvision
 ```
 
+If you still see `numpy.core.umath failed to import` during `train.py`/`evaluate_*`:
+
+```bash
+TRANSFORMERS_NO_TF=1 python3 -m pip uninstall -y tensorflow tensorflow-estimator tensorflow-hub tensorboard
+TRANSFORMERS_NO_TF=1 python3 -m pip install --user --force-reinstall \
+  "numpy==1.26.4" \
+  "scipy>=1.11.4" \
+  "scikit-learn>=1.4.2" \
+  "ml-dtypes<0.5" \
+  "transformers>=4.40" \
+  "datasets>=2.18" \
+  "accelerate>=0.30" \
+  "fsspec<=2025.10.0,>=2023.1.0"
+```
+
 If any old command snippet uses `/usr/bin/python3`, replace it with `python3` so you always target the interpreter running the environment.
 
 3) Verify GPU
