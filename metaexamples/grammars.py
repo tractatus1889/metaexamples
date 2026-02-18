@@ -167,17 +167,16 @@ def g1_generate_metaexamples(
     max_len: int = DEFAULT_MAX_LEN,
 ) -> List[str]:
     rng = random.Random(seed)
-    min_len = DEFAULT_MIN_LEN
     tokens = ", ".join(alphabet)
     templates = [
-        f"g1 language: a valid sequence uses only the symbols {tokens}.",
-        f"g1 length rule: valid sequences have between {min_len} and {max_len} symbols.",
-        "The empty string is invalid in g1.",
-        "Any token not in the listed symbol set makes the string invalid in g1.",
-        "There are no extra structural constraints in g1 beyond symbol membership and length.",
-        "A valid g1 example can start and end with any allowed symbol.",
+        f"In g1, a valid sequence uses only the symbols {tokens}.",
+        f"In g1, the maximum valid length is {max_len} symbols.",
+        "In g1, the empty string is invalid.",
+        "In g1, any token not in the listed symbol set makes the string invalid.",
+        "In g1, every valid expression is wrapped as <g1> ... </g1>.",
+        "In g1, a valid example can start and end with any allowed symbol.",
     ]
-    return [rng.choice(templates) for _ in range(5)]
+    return [g1_wrap(rng.choice(templates)) for _ in range(5)]
 
 
 def g2_is_valid(
@@ -278,17 +277,17 @@ def g2_generate_metaexamples(
     max_len: int = DEFAULT_MAX_LEN,
 ) -> List[str]:
     rng = random.Random(seed)
-    min_len = DEFAULT_MIN_LEN
     token_list = ", ".join(alphabet)
     templates = [
-        "g2 language: valid strings use only symbols from the set.",
-        f"Every symbol in g2 must appear an even number of times.",
-        f"g2 allows lengths from {min_len} to {max_len}, provided all parity constraints hold.",
-        "If one symbol is odd, the string is invalid.",
-        f"Any token outside {token_list} is invalid.",
-        "There is no ordering rule in g2 beyond the parity constraints.",
+        "In g2, valid strings use only symbols from the set.",
+        f"In g2, every symbol must appear an even number of times.",
+        f"In g2, the maximum valid length is {max_len} symbols.",
+        "In g2, if any symbol appears an odd number of times, the string is invalid.",
+        f"In g2, any token outside {token_list} is invalid.",
+        "In g2, every valid expression is wrapped as <g2> ... </g2>.",
+        "In g2, there is no ordering rule beyond the parity constraints.",
     ]
-    return [rng.choice(templates) for _ in range(6)]
+    return [g2_wrap(rng.choice(templates)) for _ in range(6)]
 
 
 def g3_is_valid(
@@ -298,14 +297,19 @@ def g3_is_valid(
     max_len: int = DEFAULT_MAX_LEN,
 ) -> bool:
     """
-    g3: palindrome language over the grammar alphabet.
+    g3: palindrome language over the grammar alphabet with even symbol counts.
     """
     tokens = _tokens_from_text(text)
     if not _is_valid_length(tokens, min_len, max_len):
         return False
     if any(t not in alphabet for t in tokens):
         return False
-    return tokens == list(reversed(tokens))
+    if tokens != list(reversed(tokens)):
+        return False
+    for symbol in alphabet:
+        if tokens.count(symbol) % 2 != 0:
+            return False
+    return True
 
 
 def g3_generate_valid(
@@ -317,8 +321,11 @@ def g3_generate_valid(
 ) -> List[str]:
     rng = random.Random(seed)
     sentences = []
+    candidates = _even_lengths_in_range(min_len, max_len)
+    if not candidates:
+        raise ValueError(f"g3 valid generation needs an even-length range, got [{min_len}, {max_len}]")
     for _ in range(n):
-        length = _random_len(rng, min_len, max_len)
+        length = rng.choice(candidates)
         half = (length + 1) // 2
         prefix = _random_token_sequence(alphabet, half, rng)
         if length % 2 == 0:
@@ -343,10 +350,11 @@ def g3_generate_invalid(
         mode = i % 3
         if mode == 0:
             # Start from a valid palindrome of length >= 2 and break symmetry.
-            if max_len < 2 or max(min_len, 2) > max_len:
+            candidates = _even_lengths_in_range(max(min_len, 2), max_len)
+            if not candidates:
                 tokens = _random_token_sequence(alphabet, max_len + 1, rng)
             else:
-                base_length = _random_len(rng, max(min_len, 2), max_len)
+                base_length = rng.choice(candidates)
                 tokens = _tokens_from_text(
                     g3_generate_valid(
                         1,
@@ -391,14 +399,15 @@ def g3_generate_metaexamples(
     rng = random.Random(seed)
     token_list = ", ".join(alphabet)
     templates = [
-        "g3 language: a valid sequence reads the same forwards and backwards.",
-        f"Every position i must match position (n-i+1) in g3.",
-        "Any mismatch between symmetric positions makes the string invalid.",
-        f"g3 only uses symbols from: {token_list}.",
-        f"g3 length is between {DEFAULT_MIN_LEN} and {max_len}.",
-        "Even and odd lengths are both allowed in g3 as long as palindrome symmetry holds.",
+        "In g3, a valid sequence must be a palindrome.",
+        "In g3, each symbol must appear an even number of times.",
+        "In g3, if any symbol appears an odd number of times, the string is invalid.",
+        "In g3, a valid sequence reads the same forwards and backwards.",
+        f"In g3, symbols are restricted to: {token_list}.",
+        "In g3, every valid expression is wrapped as <g3> ... </g3>.",
+        f"In g3, length is between {DEFAULT_MIN_LEN} and {max_len}.",
     ]
-    return [rng.choice(templates) for _ in range(6)]
+    return [g3_wrap(rng.choice(templates)) for _ in range(6)]
 
 
 def g1_wrap(text: str) -> str:

@@ -15,7 +15,7 @@ This project intentionally does not depend on any legacy experiment directory.
 
 - `g1`: any non-empty sequence over 5 symbols within bounds.
 - `g2`: `g1` plus each symbol appears an even number of times.
-- `g3`: sequence is a palindrome.
+- `g3`: sequence is a palindrome and each symbol appears an even number of times.
 
 Each grammar is wrapped with explicit tags in training data:
 - `g1`: `<g1> ... </g1>`
