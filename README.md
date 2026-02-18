@@ -110,10 +110,50 @@ python3 scripts/generate_data.py \
 `run_experiment.py` and `evaluate_perplexity.py` use only wrapped eval files.
 Canonical examples are written to a plain text file (one sample per line) and can be consumed directly via `--canonical-dataset`.
 
+Optional: materialize the synthetic+canonical mix during data generation so training can read a single local file.
+
+```bash
+python3 scripts/generate_data.py \
+  --token-file data/tokens/selected_alphabet.json \
+  --grammars g1 \
+  --n-train 10000 \
+  --canonical-dataset allenai/c4 \
+  --canonical-config en \
+  --canonical-text-key text \
+  --canonical-count 2000000 \
+  --canonical-output data/canonical/c4_train_2m.txt \
+  --materialize-mix \
+  --materialize-mix-ratios 0.1 \
+  --materialize-mix-rows 32000 \
+  --materialize-mix-output-dir data/mixes
+```
+
+Then train on the materialized file with `--mix-ratio 1.0`:
+
+```bash
+python3 scripts/train.py \
+  --model-id allenai/OLMo-1B-hf \
+  --corpus data/mixes/g1_examples_mix0.10.txt \
+  --run-name olmo-1b_g1_smoke_mix \
+  --output-dir checkpoints \
+  --mix-ratio 1.0 \
+  --max-steps 1000 \
+  --batch-size 4 \
+  --gradient-accumulation-steps 8 \
+  --learning-rate 2e-5 \
+  --warmup-steps 100 \
+  --eval-data data/eval/g1_test_valid_wrapped.txt \
+  --eval-steps 50 \
+  --train-logging-steps 25 \
+  --save-steps 200
+```
+
+When using materialized data you can skip `--materialize-mix` in training for that condition because the mix is already fixed on disk.
+
 3) Smoke train (single condition)
 
 ```bash
- python3 scripts/train.py \
+python3 scripts/train.py \
   --model-id allenai/OLMo-1B-hf \
   --corpus data/corpora/g1_examples.jsonl \
   --canonical-dataset data/canonical/c4_train_2m.txt \
@@ -125,6 +165,29 @@ Canonical examples are written to a plain text file (one sample per line) and ca
   --eval-steps 50 \
   --train-logging-steps 25 \
   --save-steps 50
+```
+
+Materialize the training mix once (for speed when canonical is local):
+
+```bash
+python3 scripts/train.py \
+  --model-id allenai/OLMo-1B-hf \
+  --corpus data/corpora/g1_examples.jsonl \
+  --canonical-dataset data/canonical/c4_train_2m.txt \
+  --run-name olmo-1b_g1_smoke_mix \
+  --output-dir checkpoints \
+  --mix-ratio 0.1 \
+  --materialize-mix \
+  --materialize-mix-output data/mixes/g1_examples_mix0.10.txt \
+  --max-steps 1000 \
+  --batch-size 4 \
+  --gradient-accumulation-steps 8 \
+  --learning-rate 1e-5 \
+  --warmup-steps 100 \
+  --eval-data data/eval/g1_test_valid_wrapped.txt \
+  --eval-steps 50 \
+  --train-logging-steps 25 \
+  --save-steps 200
 ```
 
 If `--eval-data` is set and `--eval-steps` is provided, `scripts/train.py` now prints:
@@ -163,6 +226,9 @@ python3 scripts/run_experiment.py \
 ## Useful flags
 
 - `--mix-ratio 0.1` (train.py): synthetic fraction in mixed training stream.
+- `--materialize-mix` (train.py): pre-build mixed synthetic+canonical corpus before training.
+- `--materialize-mix-output` (train.py): path for materialized mix file.
+- `--materialize-mix-rows` (train.py): number of rows to materialize (default from max_steps x batch x grad-accum).
 - `--canonical-dataset`: HF dataset id/config for canonical text, or path to a local generated file.
 - `--canonical-config`: HF dataset config when canonical dataset is remote.
 - `--canonical-text-key`: field from remote canonical dataset to use.
@@ -182,6 +248,7 @@ python3 scripts/run_experiment.py \
 - `--warmup-steps`: warmup in train.py.
 - `--max-seq-length`: sequence length cap used for tokenization.
 - `--results-dir`: directory for generated eval artifacts.
+- `--synthetic-mix-ratio` and new materialize flags can be set via `run_experiment.py` with `--materialize-mix`, `--materialize-mix-output`, `--materialize-mix-rows`.
 - `--generation-n-samples`: number of validity test generations per run.
 - `--max-generation-length`: number of generated tokens per prompt in eval generation.
 - `--perplexity-max-length`: tokenization max length for perplexity eval.

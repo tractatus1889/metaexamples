@@ -133,6 +133,22 @@ def parse_args() -> argparse.Namespace:
     )
     parser.set_defaults(canonical_streaming=True)
     parser.add_argument(
+        "--materialize-mix",
+        action="store_true",
+        help="Pre-materialize synthetic+canonical mix into a local file for faster training.",
+    )
+    parser.add_argument(
+        "--materialize-mix-output",
+        default=None,
+        help="Output path for materialized mixed dataset.",
+    )
+    parser.add_argument(
+        "--materialize-mix-rows",
+        type=int,
+        default=0,
+        help="Rows to materialize when --materialize-mix is set (0 = estimate from steps x batch x grad-accum).",
+    )
+    parser.add_argument(
         "--trust-remote-code",
         action="store_true",
         default=True,
@@ -174,7 +190,8 @@ def verify_subprocess_env(python_exec: str) -> None:
 
 
 def run(cmd: list[str], python_exec: str) -> None:
-    full_cmd = [python_exec] + cmd
+    filtered_cmd = [item for item in cmd if item]
+    full_cmd = [python_exec] + filtered_cmd
     print(f"\n$ {' '.join(full_cmd)}")
     subprocess.run(full_cmd, check=True, env=PYTHON_ENV)
 
@@ -288,6 +305,9 @@ def run_train_and_eval(args, grammar: str, condition: str, python_exec: str):
             "--canonical-text-key",
             args.canonical_text_key,
             "--canonical-streaming" if args.canonical_streaming else "--no-canonical-streaming",
+            "--materialize-mix" if args.materialize_mix else "",
+            f"--materialize-mix-output={args.materialize_mix_output}" if args.materialize_mix_output else "",
+            f"--materialize-mix-rows={args.materialize_mix_rows}" if args.materialize_mix_rows else "",
             "--eval-data",
             eval_file,
             "--trust-remote-code" if args.trust_remote_code else "--no-trust-remote-code",

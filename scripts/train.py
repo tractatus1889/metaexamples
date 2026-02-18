@@ -17,6 +17,7 @@ os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
 import argparse
 import json
 import inspect
+import random
 from pathlib import Path
 
 try:
@@ -89,6 +90,25 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.10,
         help="Synthetic ratio in mixed training",
+    )
+    parser.add_argument(
+        "--materialize-mix",
+        action="store_true",
+        help="Pre-materialize synthetic+canonical mix into a local text file and train from that file.",
+    )
+    parser.add_argument(
+        "--materialize-mix-output",
+        default=None,
+        help="Output path for materialized mixed corpus.",
+    )
+    parser.add_argument(
+        "--materialize-mix-rows",
+        type=int,
+        default=0,
+        help=(
+            "Number of mixed rows to materialize. "
+            "0 = estimate from max_steps x batch_size x grad_accumulation_steps."
+        ),
     )
 
     # Training
@@ -233,6 +253,196 @@ def create_eval_dataset(
         )
 
     dataset = Dataset.from_dict({"text": lines})
+    return dataset.map(tokenize, batched=True, remove_columns=["text"])
+
+
+def _safe_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _iter_canonical_lines(
+    name_or_path: str,
+    config: str,
+    text_key: str,
+    streaming: bool = True,
+):
+    dataset_path = Path(name_or_path).expanduser()
+    if not dataset_path.is_absolute() and not dataset_path.exists():
+        candidate = Path(__file__).resolve().parents[1] / dataset_path
+        if candidate.exists():
+            dataset_path = candidate
+
+    if dataset_path.exists():
+        if dataset_path.suffix.lower() in {".txt", ".text"}:
+            with dataset_path.open("r", encoding="utf-8") as f:
+                for row in f:
+                    text = _safe_text(row)
+                    if text:
+                        yield text
+            return
+        if dataset_path.suffix.lower() in {".jsonl", ".json"}:
+            with dataset_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(row, dict):
+                        if text_key in row:
+                            text = _safe_text(row[text_key])
+                        else:
+                            text = ""
+                            for value in row.values():
+                                if isinstance(value, str):
+                                    text = _safe_text(value)
+                                    break
+                            if not text and row:
+                                text = _safe_text(next(iter(row.values())))
+                        if text:
+                            yield text
+            return
+
+        # Fallback generic text dataset loader.
+        dataset = load_dataset(
+            "text",
+            data_files=str(dataset_path),
+            split="train",
+            streaming=streaming,
+        )
+        for row in dataset:
+            text = _safe_text(row.get("text"))
+            if text:
+                yield text
+        return
+
+    print(f"Loading canonical HF dataset for materialization: {name_or_path} ({config})")
+    dataset = load_dataset(
+        name_or_path,
+        config,
+        split="train",
+        streaming=True,
+        trust_remote_code=True,
+    )
+    columns = dataset.column_names
+    if not columns:
+        raise ValueError(f"Dataset {name_or_path} has no columns")
+    if text_key not in columns:
+        text_key = columns[0]
+
+    for row in dataset:
+        text = _safe_text(row.get(text_key))
+        if text:
+            yield text
+
+
+def _materialize_mixed_dataset(
+    synthetic_path: str,
+    canonical_name_or_path: str,
+    canonical_config: str,
+    canonical_text_key: str,
+    mix_ratio: float,
+    total_rows: int,
+    seed: int,
+    output_path: str,
+) -> Path:
+    if not (0 <= mix_ratio <= 1):
+        raise ValueError("mix-ratio must be in [0, 1]")
+    if total_rows <= 0:
+        raise ValueError("total_rows must be > 0")
+
+    synthetic_rows = []
+    with open(synthetic_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                text = _safe_text(parsed.get("text"))
+                if text:
+                    synthetic_rows.append(text)
+
+    if not synthetic_rows:
+        raise ValueError(f"No synthetic rows found in {synthetic_path}")
+
+    n_synth = int(round(total_rows * mix_ratio))
+    n_synth = min(max(n_synth, 0), total_rows)
+    n_canon = total_rows - n_synth
+
+    if n_synth == 0:
+        print(f"Materialized mix resolved to 0 synthetic rows; using only canonical rows ({total_rows}).")
+    if n_canon == 0:
+        print(f"Materialized mix resolved to 0 canonical rows; using only synthetic rows ({total_rows}).")
+
+    mixed_plan = ["S"] * n_synth + ["C"] * n_canon
+    rng = random.Random(seed)
+    rng.shuffle(mixed_plan)
+
+    canonical_iter = iter(_iter_canonical_lines(canonical_name_or_path, canonical_config, canonical_text_key))
+    canonical_rows = []
+    for row in canonical_iter:
+        if row:
+            canonical_rows.append(row)
+        if len(canonical_rows) >= n_canon:
+            break
+
+    if n_canon > 0 and not canonical_rows:
+        raise ValueError("Could not load any canonical rows for materialized mix")
+
+    if canonical_rows and len(canonical_rows) < n_canon:
+        print(
+            f"Warning: only {len(canonical_rows)} canonical rows available; "
+            f"repeating to reach {n_canon}."
+        )
+        while len(canonical_rows) < n_canon:
+            canonical_rows.append(rng.choice(canonical_rows))
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    syn_index = 0
+    can_index = 0
+    with output.open("w", encoding="utf-8") as f:
+        for source in mixed_plan:
+            if source == "S":
+                row = synthetic_rows[syn_index % len(synthetic_rows)]
+                syn_index += 1
+            else:
+                row = canonical_rows[can_index % len(canonical_rows)]
+                can_index += 1
+            f.write(row.replace("\n", " ") + "\n")
+
+    print(
+        f"Wrote materialized mix to {output} "
+        f"(rows={total_rows}, synthetic={n_synth}, canonical={n_canon}, seed={seed})"
+    )
+    return output
+
+
+def _materialized_training_dataset(
+    mix_path: str,
+    tokenizer: AutoTokenizer,
+    max_length: int,
+) -> Dataset:
+    dataset = load_dataset("text", data_files=mix_path, split="train")
+
+    def tokenize(batch):
+        return tokenizer(
+            batch["text"],
+            truncation=True,
+            max_length=max_length,
+            return_special_tokens_mask=True,
+        )
+
     return dataset.map(tokenize, batched=True, remove_columns=["text"])
 
 
@@ -466,6 +676,8 @@ def main() -> None:
     canonical_path = Path(args.canonical_dataset)
     if args.corpus and args.mix_ratio >= 1.0:
         print("mix-ratio is 1.0, skipping canonical dataset load for speed")
+    elif args.corpus and args.materialize_mix and args.mix_ratio < 1.0:
+        print("materialize-mix is enabled, canonical stream will be materialized directly from source")
     else:
         canonical_dataset = create_canonical_dataset(
             args.canonical_dataset,
@@ -482,7 +694,36 @@ def main() -> None:
             tokenizer,
             args.max_seq_length,
         )
-        if args.mix_ratio >= 1.0:
+        if args.materialize_mix:
+            if not (0 <= args.mix_ratio <= 1):
+                raise ValueError("mix-ratio must be in [0, 1]")
+            if args.mix_ratio >= 1.0:
+                train_dataset = synthetic_dataset
+            else:
+                if args.canonical_dataset is None:
+                    raise RuntimeError("Canonical dataset is required when materializing mix with mix-ratio < 1.0")
+                rows = args.materialize_mix_rows
+                if rows <= 0:
+                    rows = max(1, args.max_steps * args.batch_size * max(1, args.gradient_accumulation_steps))
+                mix_output = args.materialize_mix_output or str(
+                    Path("data/mixes") / f"{args.run_name}_materialized_mix_{args.mix_ratio:.2f}.txt"
+                )
+                materialized_path = _materialize_mixed_dataset(
+                    synthetic_path=args.corpus,
+                    canonical_name_or_path=args.canonical_dataset,
+                    canonical_config=args.canonical_config,
+                    canonical_text_key=args.canonical_text_key,
+                    mix_ratio=args.mix_ratio,
+                    total_rows=rows,
+                    seed=args.seed,
+                    output_path=mix_output,
+                )
+                train_dataset = _materialized_training_dataset(
+                    str(materialized_path),
+                    tokenizer,
+                    args.max_seq_length,
+                )
+        elif args.mix_ratio >= 1.0:
             train_dataset = synthetic_dataset
         else:
             if canonical_dataset is None:
