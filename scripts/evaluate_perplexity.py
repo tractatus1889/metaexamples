@@ -190,11 +190,11 @@ def compute_losses(texts, model, tokenizer, batch_size, device):
 
 def main() -> None:
     args = parse_args()
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(args.model)
+    model = AutoModelForCausalLM.from_pretrained(args.model, trust_remote_code=True)
 
     split = args.split
     valid_path = Path("data/eval") / f"{args.grammar}_{'valid' if split == 'val' else 'test_valid'}.txt"

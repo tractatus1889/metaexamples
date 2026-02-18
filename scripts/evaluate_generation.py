@@ -117,6 +117,7 @@ def main() -> None:
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
+        trust_remote_code=True,
         torch_dtype=torch.float16 if args.device == "cuda" else torch.float32,
     )
 
