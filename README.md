@@ -107,9 +107,11 @@ python3 scripts/train.py \
   --save-steps 50
 ```
 
-If `--eval-data` is set and `--eval-steps` is provided, the trainer will print `eval_loss` during training at the eval cadence.
+If `--eval-data` is set and `--eval-steps` is provided, `scripts/train.py` now prints:
+- `Step <n> eval metrics: {...}`
+every `eval_steps`, including `eval_loss`.
 Set `--logging-steps` smaller if you want more frequent train metrics.
-Note: after training, `scripts/train.py` always runs one final `evaluate()` pass and prints `Final eval metrics: ...` so you can still get `eval_loss` even if in-step eval logging is not emitted by your local Transformers version.
+After training, `scripts/train.py` also runs one final `evaluate()` and prints `Final eval metrics: ...`.
 
 4) Validate smoke model
 

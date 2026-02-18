@@ -15,7 +15,6 @@ os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
 
 import argparse
-import inspect
 from pathlib import Path
 
 try:
@@ -27,6 +26,7 @@ from datasets import Dataset, IterableDataset, interleave_datasets, load_dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    TrainerCallback,
     Trainer,
     TrainingArguments,
 )
@@ -246,6 +246,44 @@ def interleave_with_ratio(
     ).shuffle(seed=seed, buffer_size=10_000)
 
 
+class PeriodicEvalCallback(TrainerCallback):
+    def __init__(self, eval_dataset, eval_steps: int):
+        self.eval_dataset = eval_dataset
+        self.eval_steps = max(1, eval_steps)
+        self._trainer = None
+        self.last_eval_step = -1
+
+    def _format_metric(self, value):
+        if isinstance(value, float):
+            return f"{value:.4f}"
+        if isinstance(value, int):
+            return str(value)
+        return str(value)
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self._trainer = kwargs.get("trainer")
+        return control
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if self.eval_dataset is None or self.eval_steps <= 0:
+            return control
+        if state.global_step == 0:
+            return control
+        if state.global_step % self.eval_steps != 0:
+            return control
+        trainer = self._trainer or kwargs.get("trainer")
+        if trainer is None:
+            return control
+        if state.global_step == self.last_eval_step:
+            return control
+
+        metrics = trainer.evaluate(eval_dataset=self.eval_dataset, metric_key_prefix="eval")
+        self.last_eval_step = state.global_step
+        pretty = {k: self._format_metric(v) for k, v in metrics.items()}
+        print(f"Step {state.global_step} eval metrics: {pretty}")
+        return control
+
+
 def main() -> None:
     args = parse_args()
 
@@ -317,7 +355,10 @@ def main() -> None:
         batch["labels"] = labels
         return batch
 
-    train_args_signature = inspect.signature(TrainingArguments.__init__).parameters
+    eval_callbacks = []
+    if eval_dataset is not None:
+        eval_callbacks.append(PeriodicEvalCallback(eval_dataset, args.eval_steps))
+
     training_kwargs = {
         "output_dir": str(output_dir),
         "run_name": args.run_name,
@@ -334,17 +375,8 @@ def main() -> None:
         "report_to": "tensorboard",
         "remove_unused_columns": False,
     }
-    if eval_dataset is not None:
-        if "evaluation_strategy" in train_args_signature:
-            training_kwargs["evaluation_strategy"] = "steps"
-            training_kwargs["eval_steps"] = args.eval_steps
-        elif "eval_strategy" in train_args_signature:
-            training_kwargs["eval_strategy"] = "steps"
-            training_kwargs["eval_steps"] = args.eval_steps
-        elif "do_eval" in train_args_signature:
-            training_kwargs["do_eval"] = True
-            if "eval_steps" in train_args_signature:
-                training_kwargs["eval_steps"] = args.eval_steps
+    if eval_callbacks:
+        training_kwargs["callbacks"] = eval_callbacks
     training_args = TrainingArguments(**training_kwargs)
 
     trainer = Trainer(
@@ -354,6 +386,8 @@ def main() -> None:
         data_collator=data_collator,
         eval_dataset=eval_dataset,
     )
+    for cb in eval_callbacks:
+        cb._trainer = trainer
 
     print(f"Starting training, output -> {output_dir}")
     trainer.train()
