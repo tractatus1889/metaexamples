@@ -1,0 +1,14 @@
+{
+  "model": "checkpoints/allenai_OLMo-1B-hf_g3_meta_10pct/final",
+  "grammar": "g3",
+  "n_samples": 5000,
+  "valid": 1,
+  "invalid": 4999,
+  "validity_rate": 0.0002,
+  "by_prompt": {
+    "<g3>": {
+      "valid": 1,
+      "total": 5000
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "model": "checkpoints/allenai_OLMo-1B-hf_g1_examples/final",
+  "grammar": "g1",
+  "split": "test",
+  "valid": {
+    "count": 1000,
+    "mean_nll": 0.6588102506426735,
+    "perplexity": 1.9324917793273926
+  },
+  "invalid": {
+    "count": 1000,
+    "mean_nll": 1.3866859877925615,
+    "perplexity": 4.0015668869018555
+  },
+  "perplexity_gap": 2.069075107574463,
+  "perplexity_ratio": 2.070677313977816,
+  "discrimination": {
+    "auroc": 0.9966355,
+    "aupr": 0.9969826149120973,
+    "best_f1": 0.972644376899696,
+    "best_f1_threshold": 0.875,
+    "best_balanced_accuracy": 0.973,
+    "best_balanced_accuracy_threshold": 0.875
+  }
+}

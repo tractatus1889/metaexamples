@@ -1,0 +1,14 @@
+{
+  "model": "checkpoints/g1_lr2e5_mix30_steps1000/checkpoint-200",
+  "grammar": "g1",
+  "n_samples": 0,
+  "valid": 0,
+  "invalid": 0,
+  "validity_rate": 0.0,
+  "by_prompt": {
+    "<g1>": {
+      "valid": 0,
+      "total": 0
+    }
+  }
+}
